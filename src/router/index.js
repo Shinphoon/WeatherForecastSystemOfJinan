@@ -1,0 +1,65 @@
+import { createRouter, createWebHistory } from 'vue-router'
+import Home from '../views/Home.vue'
+import Reality from '../views/Reality.vue'
+import Forecast from '../views/Forecast.vue'
+import Mine from '../views/Mine.vue'
+import Radar from '../views/Radar.vue'
+import Login from '../views/Login.vue'
+import Register from '../views/Register.vue'
+
+const routes = [
+
+    {
+        path: '/',
+        name:'Home',
+        component:Home
+    },
+
+    {
+        path:'/reality',
+        name:'Reality',
+        component:Reality
+    },
+
+    {
+        path:'/forecast',
+        name:'Forecast',
+        component:Forecast
+    },
+
+    {
+        path:'/mine',
+        name:'Mine',
+        component:Mine
+    },
+
+    {
+        path: '/radar',
+        name: 'Radar',
+        component: Radar
+    },
+
+    {
+  path: '/login',
+  name: 'Login',
+  component: Login
+    },
+
+    {
+    path: '/register',
+    name: 'Register',
+    component: Register
+    }
+]
+
+
+const router=createRouter({
+
+    history:createWebHistory(),
+
+    routes
+
+})
+
+
+export default router

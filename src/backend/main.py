@@ -1,0 +1,217 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from qweather_spider import get_realtime_weather, get_today_weather, get_station_info
+from forecast_service import get_24h_forecast, get_2h_forecast, get_7d_forecast
+from ground_image_service import find_latest_ground_image
+from alert_service import get_current_alert_summary
+from auth import router as auth_router
+
+app = FastAPI()
+
+app.include_router(auth_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+STATIONS = [
+    {
+        "id": "54727",
+        "name": "章丘",
+        "lat": 36.68,
+        "lon": 117.53
+    },
+    {
+        "id": "54816",
+        "name": "长清",
+        "lat": 36.55,
+        "lon": 116.73
+    },
+    {
+        "id": "54818",
+        "name": "平阴",
+        "lat": 36.29,
+        "lon": 116.46
+    },
+    {
+        "id": "54821",
+        "name": "济阳",
+        "lat": 36.98,
+        "lon": 117.17
+    },
+    {
+        "id": "54823",
+        "name": "济南",
+        "lat": 36.65,
+        "lon": 117.12
+    },
+    {
+        "id": "54828",
+        "name": "莱芜",
+        "lat": 36.21,
+        "lon": 117.68
+    }
+]
+
+VALID_STATIONS = {
+    station["id"]
+    for station in STATIONS
+}
+
+def check_station(station_id):
+    if station_id not in VALID_STATIONS:
+        raise HTTPException(
+            status_code=404,
+            detail="未知气象站"
+        )
+
+def get_station(station_id):
+    check_station(station_id)
+    return next(
+        station
+        for station in STATIONS
+        if station["id"] == station_id
+    )
+
+@app.get("/")
+def root():
+    return {
+        "message": "济南天气系统后端运行成功"
+    }
+
+@app.get("/weather/stations")
+def station_list():
+    result = []
+    for station in STATIONS:
+        try:
+            info = get_station_info(
+                station["id"]
+            )
+            if info.get("lat") is None:
+                info["lat"] = station["lat"]
+            if info.get("lon") is None:
+                info["lon"] = station["lon"]
+            result.append(info)
+        except Exception:
+            result.append({
+                "station": station["id"],
+                "name": station["name"],
+                "lat": station["lat"],
+                "lon": station["lon"],
+                "alt": None
+            })
+    return result
+
+@app.get("/weather/station/{station_id}/realtime")
+def station_realtime(station_id: str):
+    check_station(station_id)
+    return get_realtime_weather(
+        station_id
+    )
+
+@app.get("/weather/station/{station_id}/today")
+def station_today(station_id: str):
+    check_station(station_id)
+    return get_today_weather(
+        station_id
+    )
+
+# 保留原来的济南实况接口
+@app.get("/weather/jinan/realtime")
+def jinan_realtime():
+    return get_realtime_weather(
+        "54823"
+    )
+
+@app.get("/weather/jinan/today")
+def jinan_today():
+    return get_today_weather(
+        "54823"
+    )
+
+# 按气象站获取未来2小时预报
+@app.get("/weather/forecast/2h/{station_id}")
+def forecast_2h_by_station(station_id: str):
+    station = get_station(
+        station_id
+    )
+    return get_2h_forecast(
+        latitude=station["lat"],
+        longitude=station["lon"]
+    )
+
+# 按气象站获取未来24小时预报
+@app.get("/weather/forecast/24h/{station_id}")
+def forecast_24h_by_station(station_id: str):
+    station = get_station(
+        station_id
+    )
+    return get_24h_forecast(
+        latitude=station["lat"],
+        longitude=station["lon"]
+    )
+
+# 按气象站获取未来7天预报
+@app.get("/weather/forecast/7d/{station_id}")
+def forecast_7d_by_station(station_id: str):
+    station = get_station(
+        station_id
+    )
+    return get_7d_forecast(
+        latitude=station["lat"],
+        longitude=station["lon"]
+    )
+
+# 以下三个旧接口继续保留，默认返回济南预报
+@app.get("/weather/forecast/2h")
+def forecast_2h():
+    return forecast_2h_by_station(
+        "54823"
+    )
+
+@app.get("/weather/forecast/24h")
+def forecast_24h():
+    return forecast_24h_by_station(
+        "54823"
+    )
+
+@app.get("/weather/forecast/7d")
+def forecast_7d():
+    return forecast_7d_by_station(
+        "54823"
+    )
+
+@app.get("/weather/ground-image")
+def get_ground_image():
+    result = find_latest_ground_image()
+
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail="暂未找到最新济南实况图"
+        )
+
+    return result
+
+@app.get("/weather/alerts/current")
+def get_current_alerts():
+    try:
+        return get_current_alert_summary()
+
+    except Exception as e:
+        print("天气预警获取失败：", e)
+
+        return {
+            "has_alert": False,
+            "count": 0,
+            "latest": None,
+            "error": "天气预警数据暂时获取失败"
+        }
+
