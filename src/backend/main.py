@@ -1,11 +1,20 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
+from wechat_service import (get_wechat_article, update_wechat_article_url)
 from qweather_spider import get_realtime_weather, get_today_weather, get_station_info
 from forecast_service import get_24h_forecast, get_2h_forecast, get_7d_forecast
 from ground_image_service import find_latest_ground_image
 from alert_service import (get_current_alert_summary,set_mock_alert,clear_mock_alert)
 from auth import router as auth_router
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+ENV_PATH = BASE_DIR / ".env"
+
+load_dotenv(ENV_PATH)
 
 app = FastAPI()
 
@@ -251,3 +260,40 @@ def delete_mock_alert():
         "success": True,
         "message": "模拟预警已取消"
     }
+
+@app.get("/weather/wechat/latest")
+def get_latest_wechat_article():
+    return get_wechat_article()
+
+from pydantic import BaseModel
+
+class WechatArticleUpdate(BaseModel):
+    url: str
+    password: str
+
+
+@app.post("/weather/wechat/update")
+def update_latest_wechat_article(
+    data: WechatArticleUpdate
+):
+    import os
+
+    admin_password = os.getenv(
+        "WECHAT_ADMIN_PASSWORD"
+    )
+
+    if not admin_password:
+        return {
+            "success": False,
+            "error": "服务器未配置管理员密码"
+        }
+
+    if data.password != admin_password:
+        return {
+            "success": False,
+            "error": "管理员密码错误"
+        }
+
+    return update_wechat_article_url(
+        data.url
+    )

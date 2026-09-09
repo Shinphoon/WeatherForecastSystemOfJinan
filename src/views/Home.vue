@@ -215,6 +215,141 @@
       </router-link>
     </section>
 
+        <!-- 拾风观象台最新推文 -->
+    <section class="section">
+      <div class="section-title">
+        <span>拾风观象台 · 最新推文</span>
+
+        <a
+          v-if="wechatArticle"
+          :href="wechatArticle.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="more"
+        >
+          阅读原文
+        </a>
+      </div>
+
+      <!-- 加载骨架屏 -->
+      <div
+        v-if="wechatLoading"
+        class="wechat-skeleton"
+      >
+        <div class="wechat-skeleton-cover"></div>
+
+        <div class="wechat-skeleton-content">
+          <div class="wechat-skeleton-account">
+            <div class="wechat-skeleton-avatar"></div>
+
+            <div class="wechat-skeleton-account-text">
+              <div class="skeleton-line skeleton-line-short"></div>
+              <div class="skeleton-line skeleton-line-mini"></div>
+            </div>
+          </div>
+
+          <div class="skeleton-line skeleton-line-title"></div>
+          <div class="skeleton-line skeleton-line-title second"></div>
+
+          <div class="wechat-skeleton-footer">
+            <div class="skeleton-line skeleton-line-date"></div>
+            <div class="skeleton-line skeleton-line-read"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 加载失败 -->
+      <div
+        v-else-if="wechatError"
+        class="wechat-error-card"
+        @click="loadWechatArticle"
+      >
+        <div class="wechat-error-icon">
+          📭
+        </div>
+
+        <div>
+          <div class="wechat-error-title">
+            {{ wechatError }}
+          </div>
+
+          <div class="wechat-error-desc">
+            点击重新加载
+          </div>
+        </div>
+      </div>
+
+      <!-- 正常文章 -->
+      <a
+        v-else-if="wechatArticle"
+        :href="wechatArticle.url"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="wechat-card"
+      >
+        <div class="wechat-cover-wrap">
+
+          <!-- 图片还没加载出来时显示渐变背景 -->
+          <div
+            v-if="!wechatImageLoaded || wechatImageError"
+            class="wechat-cover-placeholder"
+          >
+            <div class="wechat-placeholder-icon">
+              🌤
+            </div>
+
+            <div class="wechat-placeholder-text">
+              拾风观象台
+            </div>
+          </div>
+
+          <img
+            v-if="!wechatImageError"
+            :src="wechatArticle.cover"
+            :alt="wechatArticle.title"
+            class="wechat-cover"
+            referrerpolicy="no-referrer"
+            @load="handleWechatImageLoad"
+            @error="handleWechatImageError"
+          >
+
+          <div class="wechat-cover-tag">
+            最新推文
+          </div>
+        </div>
+
+        <div class="wechat-content">
+
+          <div class="wechat-account">
+            <div class="wechat-logo">
+              砜
+            </div>
+
+            <div class="wechat-account-info">
+              <span class="wechat-account-name">
+                拾风观象台
+              </span>
+            </div>
+          </div>
+
+          <div class="wechat-title">
+            {{ wechatArticle.title }}
+          </div>
+
+          <div class="wechat-footer">
+            <span>
+              {{ formatWechatDate(wechatArticle.publish_time) }}
+            </span>
+
+            <span class="wechat-read">
+              阅读全文 →
+            </span>
+          </div>
+
+        </div>
+      </a>
+    </section>
+
     <!-- 短时天气 -->
     <section class="section">
       <div class="section-title">
@@ -316,10 +451,10 @@
 </template>
 
 <script setup>
-      import { ref, computed, watch, onMounted, onUnmounted} from 'vue'
+      import { ref, computed, watch, onMounted, onUnmounted, onActivated} from 'vue'
       import WeatherCard from '../components/WeatherCard.vue'
       import StationMap from '../components/StationMap.vue'
-      import { getStations, getForecast2h, getForecast24h, getGroundImage, getCurrentAlerts} from '../api/weather'
+      import { getStations, getLatestWechatArticle, getForecast2h, getForecast24h, getGroundImage, getCurrentAlerts} from '../api/weather'
 
       const stationOptions = [
         { id:'54823', name:'济南' },
@@ -365,6 +500,50 @@
 
       const alertLoading = ref(false)
       let alertTimer = null
+
+      const wechatArticle = ref(null)
+      const wechatLoading = ref(true)
+      const wechatError = ref('')
+
+      const wechatImageLoaded = ref(false)
+      const wechatImageError = ref(false)
+
+      function handleWechatImageLoad() {
+        wechatImageLoaded.value = true
+      }
+
+      function handleWechatImageError() {
+        wechatImageError.value = true
+      }
+
+      async function loadWechatArticle() {
+        wechatLoading.value = true
+        wechatError.value = ''
+
+        wechatImageLoaded.value = false
+        wechatImageError.value = false
+
+        try {
+          const response = await getLatestWechatArticle()
+
+          if (response.data && response.data.success) {
+            wechatArticle.value = response.data
+          } else {
+            wechatError.value = '暂时无法获取最新推文'
+          }
+        } catch (err) {
+          console.error('微信公众号文章加载失败：', err)
+          wechatError.value = '最新推文加载失败'
+        } finally {
+          wechatLoading.value = false
+        }
+      }
+
+      function formatWechatDate(time) {
+        if (!time) return ''
+
+        return time.slice(0, 16)
+      }
 
       const warningLevelClass = computed(() => {
         const level = alertData.value.latest?.level
@@ -578,6 +757,12 @@
 
       if (alertTimer) {
         clearInterval(alertTimer)
+      }
+    })
+
+    onActivated(() => {
+      if (!wechatArticle.value) {
+        loadWechatArticle()
       }
     })
 </script>
@@ -1230,5 +1415,368 @@
   margin-top: 7px;
   font-size: 11px;
   color: #94a3b8;
+}
+
+/* =========================
+   拾风观象台最新推文
+========================= */
+
+.wechat-card {
+  display: block;
+  overflow: hidden;
+  border-radius: 18px;
+  background: white;
+  text-decoration: none;
+  color: inherit;
+  box-shadow:
+    0 6px 18px rgba(15, 23, 42, 0.07);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.wechat-card:active {
+  transform: scale(0.985);
+}
+
+.wechat-cover-wrap {
+  position: relative;
+  width: 100%;
+  height: 150px;
+  overflow: hidden;
+  background: #e8f1ff;
+}
+
+.wechat-cover {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wechat-cover-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  background:
+    radial-gradient(
+      circle at 70% 25%,
+      rgba(255,255,255,0.45),
+      transparent 35%
+    ),
+    linear-gradient(
+      135deg,
+      #dcebff,
+      #a8ceff
+    );
+
+  color: #267cff;
+}
+
+.wechat-placeholder-icon {
+  font-size: 34px;
+}
+
+.wechat-placeholder-text {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wechat-cover-tag {
+  position: absolute;
+  z-index: 3;
+  left: 12px;
+  top: 12px;
+
+  padding: 4px 9px;
+
+  border-radius: 999px;
+
+  background: rgba(38, 124, 255, 0.92);
+
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+
+  box-shadow:
+    0 3px 10px rgba(38,124,255,0.25);
+}
+
+.wechat-content {
+  padding: 13px 15px 14px;
+}
+
+.wechat-account {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.wechat-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  width: 34px;
+  height: 34px;
+
+  margin-right: 9px;
+
+  border-radius: 11px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #267cff,
+      #5aa7ff
+    );
+
+  color: white;
+  font-size: 16px;
+  font-weight: 700;
+
+  box-shadow:
+    0 4px 10px rgba(38,124,255,0.22);
+}
+
+.wechat-account-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.wechat-account-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.wechat-author {
+  margin-left: 5px;
+  font-size: 10px;
+  color: #94a3b8;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wechat-title {
+  display: -webkit-box;
+
+  overflow: hidden;
+
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+
+  color: #1e293b;
+}
+
+.wechat-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-top: 11px;
+
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.wechat-read {
+  color: #267cff;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 加载失败 */
+
+.wechat-error-card {
+  display: flex;
+  align-items: center;
+
+  padding: 16px;
+
+  border-radius: 18px;
+
+  background: white;
+
+  box-shadow:
+    0 5px 16px rgba(0,0,0,0.06);
+
+  cursor: pointer;
+}
+
+.wechat-error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  width: 44px;
+  height: 44px;
+
+  margin-right: 12px;
+
+  border-radius: 14px;
+
+  background: #edf5ff;
+
+  font-size: 22px;
+}
+
+.wechat-error-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.wechat-error-desc {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* 骨架屏 */
+
+.wechat-skeleton {
+  overflow: hidden;
+
+  border-radius: 18px;
+
+  background: white;
+
+  box-shadow:
+    0 6px 18px rgba(15,23,42,0.06);
+}
+
+.wechat-skeleton-cover {
+  width: 100%;
+  height: 150px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #edf1f5 25%,
+      #f6f8fa 37%,
+      #edf1f5 63%
+    );
+
+  background-size: 400% 100%;
+
+  animation:
+    skeletonMove 1.4s ease infinite;
+}
+
+.wechat-skeleton-content {
+  padding: 13px 15px 14px;
+}
+
+.wechat-skeleton-account {
+  display: flex;
+  align-items: center;
+
+  margin-bottom: 12px;
+}
+
+.wechat-skeleton-avatar {
+  width: 34px;
+  height: 34px;
+
+  flex-shrink: 0;
+
+  margin-right: 9px;
+
+  border-radius: 11px;
+
+  background: #edf1f5;
+}
+
+.wechat-skeleton-account-text {
+  flex: 1;
+}
+
+.skeleton-line {
+  border-radius: 999px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #edf1f5 25%,
+      #f7f9fb 37%,
+      #edf1f5 63%
+    );
+
+  background-size: 400% 100%;
+
+  animation:
+    skeletonMove 1.4s ease infinite;
+}
+
+.skeleton-line-short {
+  width: 90px;
+  height: 10px;
+}
+
+.skeleton-line-mini {
+  width: 130px;
+  height: 8px;
+
+  margin-top: 7px;
+}
+
+.skeleton-line-title {
+  width: 95%;
+  height: 13px;
+
+  margin-top: 8px;
+}
+
+.skeleton-line-title.second {
+  width: 68%;
+}
+
+.wechat-skeleton-footer {
+  display: flex;
+  justify-content: space-between;
+
+  margin-top: 15px;
+}
+
+.skeleton-line-date {
+  width: 90px;
+  height: 8px;
+}
+
+.skeleton-line-read {
+  width: 65px;
+  height: 8px;
+}
+
+@keyframes skeletonMove {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: 0 0;
+  }
 }
 </style>

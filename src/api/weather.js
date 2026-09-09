@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const BASE_URL = 'http://172.20.10.4:8000'
+const BASE_URL = '/api'
 
 // 获取六个气象站基本信息
 export function getStations() {
@@ -51,5 +51,11 @@ export function getGroundImage() {
 export function getCurrentAlerts() {
   return axios.get(
     `${BASE_URL}/weather/alerts/current`
+  )
+}
+
+export function getLatestWechatArticle() {
+  return axios.get(
+    'http://127.0.0.1:8000/weather/wechat/latest'
   )
 }

@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const BASE_URL = 'http://172.20.10.4:8000'
+const BASE_URL = '/api'
 
 export function registerUser(data) {
   return axios.post(
