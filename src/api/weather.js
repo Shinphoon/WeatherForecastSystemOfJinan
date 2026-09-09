@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const BASE_URL = 'http://127.0.0.1:8000'
+const BASE_URL = 'http://172.20.10.4:8000'
 
 // 获取六个气象站基本信息
 export function getStations() {
@@ -43,9 +43,10 @@ export function getForecast7d(stationId = '54823') {
 
 export function getGroundImage() {
   return axios.get(
-    'http://127.0.0.1:8000/weather/ground-image'
+    `${BASE_URL}/weather/ground-image`
   )
 }
+
 
 export function getCurrentAlerts() {
   return axios.get(

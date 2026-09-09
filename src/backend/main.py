@@ -1,9 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime
 from qweather_spider import get_realtime_weather, get_today_weather, get_station_info
 from forecast_service import get_24h_forecast, get_2h_forecast, get_7d_forecast
 from ground_image_service import find_latest_ground_image
-from alert_service import get_current_alert_summary
+from alert_service import (get_current_alert_summary,set_mock_alert,clear_mock_alert)
 from auth import router as auth_router
 
 app = FastAPI()
@@ -14,7 +15,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173",
+        "http://172.20.10.4:5173"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -215,3 +217,37 @@ def get_current_alerts():
             "error": "天气预警数据暂时获取失败"
         }
 
+@app.post("/weather/alerts/mock")
+def create_mock_alert():
+    mock_alert = {
+        "title": "济南市气象台发布暴雨橙色预警信号",
+        "type": "暴雨",
+        "level": "橙色",
+        "sender": "济南市气象台",
+        "area": "济南市",
+        "publish_time": datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ),
+        "description": (
+            "模拟预警：预计未来3小时济南市部分地区"
+            "可能出现较强降水，请注意防范。"
+        ),
+        "url": ""
+    }
+
+    set_mock_alert(mock_alert)
+
+    return {
+        "success": True,
+        "message": "已开启模拟暴雨橙色预警",
+        "alert": mock_alert
+    }
+
+@app.delete("/weather/alerts/mock")
+def delete_mock_alert():
+    clear_mock_alert()
+
+    return {
+        "success": True,
+        "message": "模拟预警已取消"
+    }

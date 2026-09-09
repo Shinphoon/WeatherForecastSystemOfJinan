@@ -61,7 +61,12 @@
             </div>
           </div>
           <label class="switch">
-            <input v-model="pushEnabled" type="checkbox">
+            <input
+              v-model="pushEnabled"
+              type="checkbox"
+              :disabled="pushSaving"
+              @change="changePushSetting"
+            >
             <span class="slider"></span>
           </label>
         </div>
@@ -157,9 +162,13 @@
 </template>
 
 <script setup>
+
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getCurrentUser } from '../api/auth'
+import {
+  getCurrentUser,
+  updatePushSetting
+} from '../api/auth'
 
 const router = useRouter()
 const loading = ref(true)
@@ -210,7 +219,8 @@ const maskedPhone = computed(() => {
   return `${phone.slice(0,3)}****${phone.slice(7)}`
 })
 
-const pushEnabled = ref(true)
+const pushEnabled = ref(false)
+const pushSaving = ref(false)
 const radarEnabled = ref(
   localStorage.getItem('radarEnabled') !== 'false'
 )
@@ -252,6 +262,45 @@ async function loadUser() {
     isLoggedIn.value = false
   } finally {
     loading.value = false
+  }
+}
+
+async function changePushSetting() {
+  if (!isLoggedIn.value) {
+    pushEnabled.value = false
+    router.push('/login')
+    return
+  }
+
+  if (pushSaving.value) {
+    return
+  }
+
+  pushSaving.value = true
+
+  try {
+    const response =
+      await updatePushSetting(
+        pushEnabled.value
+      )
+
+    user.value.push_enable =
+      response.data.push_enable
+
+  } catch (err) {
+    console.error(
+      '预警推送设置更新失败：',
+      err
+    )
+
+    // 保存失败时，把开关恢复
+    pushEnabled.value =
+      !pushEnabled.value
+
+    alert('设置保存失败，请稍后重试')
+
+  } finally {
+    pushSaving.value = false
   }
 }
 

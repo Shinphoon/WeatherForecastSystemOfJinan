@@ -64,23 +64,18 @@
 
 
     <!-- 天气预警 -->
-     <section class="section">
+    <section class="section">
       <div class="section-title">
         <span>天气预警</span>
-        <span class="more">
-          查看更多
-        </span>
+        <span class="more">查看更多</span>
       </div>
 
       <div
         v-if="alertLoading && !alertData.update_time"
         class="warning-card"
       >
-        <div class="warning-icon">
-          ⚠
-        </div>
-
-        <div>
+        <div class="warning-icon">⚠</div>
+        <div class="warning-content">
           <div class="warning-title">
             正在加载天气预警...
           </div>
@@ -89,15 +84,23 @@
 
       <div
         v-else-if="alertData.has_alert"
-        class="warning-card warning-active"
+        class="warning-card"
+        :class="warningLevelClass"
       >
-        <div class="warning-icon">
-          ⚠
-        </div>
+        <div class="warning-icon">⚠</div>
 
         <div class="warning-content">
-          <div class="warning-title">
-            {{ alertData.latest.title }}
+          <div class="warning-title-row">
+            <div class="warning-title">
+              {{ alertData.latest.title }}
+            </div>
+
+            <span
+              v-if="alertData.mock"
+              class="mock-badge"
+            >
+              模拟预警
+            </span>
           </div>
 
           <div class="warning-desc">
@@ -105,10 +108,29 @@
             {{ alertData.latest.level }}
           </div>
 
+          <div
+            v-if="alertData.latest.sender"
+            class="warning-meta"
+          >
+            发布单位：{{ alertData.latest.sender }}
+          </div>
+
+          <div
+            v-if="alertData.latest.publish_time"
+            class="warning-meta"
+          >
+            发布时间：{{ alertData.latest.publish_time }}
+          </div>
+
+          <div
+            v-if="alertData.latest.description"
+            class="warning-description"
+          >
+            {{ alertData.latest.description }}
+          </div>
+
           <div class="warning-time">
-            当前共有
-            {{ alertData.count }}
-            条济南地区预警
+            当前共有 {{ alertData.count }} 条济南地区预警
           </div>
         </div>
       </div>
@@ -117,11 +139,9 @@
         v-else
         class="warning-card"
       >
-        <div class="warning-icon">
-          ⚠
-        </div>
+        <div class="warning-icon">⚠</div>
 
-        <div>
+        <div class="warning-content">
           <div class="warning-title">
             暂无生效中的气象预警
           </div>
@@ -345,6 +365,28 @@
 
       const alertLoading = ref(false)
       let alertTimer = null
+
+      const warningLevelClass = computed(() => {
+        const level = alertData.value.latest?.level
+
+        if (level === '红色') {
+          return 'warning-red'
+        }
+
+        if (level === '橙色') {
+          return 'warning-orange'
+        }
+
+        if (level === '黄色') {
+          return 'warning-yellow'
+        }
+
+        if (level === '蓝色') {
+          return 'warning-blue'
+        }
+
+        return 'warning-active'
+      })
       async function loadGroundImage() {
         groundImageLoading.value = true
         try {
@@ -494,48 +536,50 @@
         { immediate:true }
       )
 
-      onMounted(() => {
-        loadStations()
-        loadGroundImage()
-        loadAlerts()
-        async function loadAlerts() {
-        alertLoading.value = true
+      async function loadAlerts() {
+      alertLoading.value = true
 
-        try {
-          const response =
-            await getCurrentAlerts()
+      try {
+        const response =
+          await getCurrentAlerts()
 
-          alertData.value =
-            response.data
+        alertData.value =
+          response.data
 
-        } catch (err) {
-          console.error(
-            '天气预警加载失败：',
-            err
-          )
+      } catch (err) {
+        console.error(
+          '天气预警加载失败：',
+          err
+        )
 
-        } finally {
-          alertLoading.value = false
-        }
+      } finally {
+        alertLoading.value = false
       }
-        groundImageTimer = setInterval(() => {
-            loadGroundImage()
-          }, 300000)
-        })
+    }
 
-        alertTimer = setInterval(() => {
-            loadAlerts()
-          }, 60000)
+    onMounted(() => {
+      loadStations()
+      loadGroundImage()
+      loadAlerts()
 
-        onUnmounted(() => {
-          if (groundImageTimer) {
-            clearInterval(groundImageTimer)
-          }
+      groundImageTimer = setInterval(() => {
+        loadGroundImage()
+      }, 300000)
 
-          if (alertTimer) {
-            clearInterval(alertTimer)
-          }
-        })
+      alertTimer = setInterval(() => {
+        loadAlerts()
+      }, 60000)
+    })
+
+    onUnmounted(() => {
+      if (groundImageTimer) {
+        clearInterval(groundImageTimer)
+      }
+
+      if (alertTimer) {
+        clearInterval(alertTimer)
+      }
+    })
 </script>
 
 <style scoped>
@@ -1108,7 +1152,43 @@
 }
 
 .warning-active {
-  border: 1px solid #fde68a;
+  border: 1px solid #e5e7eb;
+}
+
+.warning-blue {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+}
+
+.warning-yellow {
+  background: #fffbeb;
+  border: 1px solid #facc15;
+}
+
+.warning-orange {
+  background: #fff7ed;
+  border: 1px solid #fb923c;
+}
+
+.warning-red {
+  background: #fef2f2;
+  border: 1px solid #f87171;
+}
+
+.warning-blue .warning-icon {
+  background: #dbeafe;
+}
+
+.warning-yellow .warning-icon {
+  background: #fef3c7;
+}
+
+.warning-orange .warning-icon {
+  background: #ffedd5;
+}
+
+.warning-red .warning-icon {
+  background: #fee2e2;
 }
 
 .warning-content {
@@ -1116,8 +1196,38 @@
   min-width: 0;
 }
 
-.warning-time {
+.warning-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mock-badge {
+  flex-shrink: 0;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #1f2937;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.warning-meta {
   margin-top: 5px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.warning-description {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #475569;
+}
+
+.warning-time {
+  margin-top: 7px;
   font-size: 11px;
   color: #94a3b8;
 }

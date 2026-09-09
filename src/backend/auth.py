@@ -293,3 +293,60 @@ def get_me(
     finally:
         cursor.close()
         conn.close()
+
+class PushSettingRequest(BaseModel):
+    push_enable: bool
+
+@router.put("/push-setting")
+def update_push_setting(
+    data: PushSettingRequest,
+    authorization: str = Header(default=None)
+):
+    user_id = get_token_user(authorization)
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        push_value = 1 if data.push_enable else 0
+
+        cursor.execute(
+            """
+            UPDATE sys_user
+            SET push_enable = ?,
+                update_time = GETDATE()
+            WHERE id = ?
+            """,
+            push_value,
+            user_id
+        )
+
+        if cursor.rowcount == 0:
+            raise HTTPException(
+                status_code=404,
+                detail="用户不存在"
+            )
+
+        conn.commit()
+
+        return {
+            "success": True,
+            "message": "天气预警推送设置已更新",
+            "push_enable": push_value
+        }
+
+    except HTTPException:
+        conn.rollback()
+        raise
+
+    except Exception as e:
+        conn.rollback()
+        print("更新预警推送设置失败：", e)
+
+        raise HTTPException(
+            status_code=500,
+            detail="预警推送设置更新失败"
+        )
+
+    finally:
+        cursor.close()
+        conn.close()

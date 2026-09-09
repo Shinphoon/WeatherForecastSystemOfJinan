@@ -2,6 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 
+MOCK_ALERT = None
+
 LIST_URL = "https://e.weather.com.cn/alarmMap/list.html"
 
 HEADERS = {
@@ -105,6 +107,18 @@ def get_jinan_alerts():
     return unique
 
 def get_current_alert_summary():
+    if MOCK_ALERT:
+        return {
+            "has_alert": True,
+            "count": 1,
+            "latest": MOCK_ALERT,
+            "alerts": [MOCK_ALERT],
+            "update_time": datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
+            "mock": True
+        }
+
     alerts = get_jinan_alerts()
 
     if not alerts:
@@ -128,3 +142,11 @@ def get_current_alert_summary():
                 "%Y-%m-%d %H:%M:%S"
             )
     }
+
+def set_mock_alert(alert):
+    global MOCK_ALERT
+    MOCK_ALERT = alert
+
+def clear_mock_alert():
+    global MOCK_ALERT
+    MOCK_ALERT = None
