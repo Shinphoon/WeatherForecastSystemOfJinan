@@ -45,3 +45,59 @@ export function updatePushSetting(pushEnable) {
     }
   )
 }
+
+export function updatePassword(
+  currentPassword,
+  newPassword
+) {
+  const token =
+    localStorage.getItem('access_token')
+
+  return axios.put(
+    `${BASE_URL}/auth/password`,
+    {
+      current_password: currentPassword,
+      new_password: newPassword
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  )
+}
+
+export function updatePhone(phone) {
+  const token =
+    localStorage.getItem('access_token')
+
+  return axios.put(
+    `${BASE_URL}/auth/phone`,
+    {
+      phone: phone
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  )
+}
+
+export function updateLocation(lng, lat) {
+  const token =
+    localStorage.getItem('access_token')
+
+  return axios.put(
+    `${BASE_URL}/auth/location`,
+    {
+      lng: lng,
+      lat: lat
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  )
+}

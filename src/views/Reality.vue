@@ -102,24 +102,16 @@
 import { ref, computed, onMounted, nextTick, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
 import {
+  getStations,
   getStationRealtimeWeather,
   getStationTodayWeather
 } from '../api/weather'
 
-const stationOptions = [
-  { id: '54823', name: '济南' },
-  { id: '54727', name: '章丘' },
-  { id: '54816', name: '长清' },
-  { id: '54818', name: '平阴' },
-  { id: '54821', name: '济阳' },
-  { id: '54828', name: '莱芜' }
-]
+const stationOptions = ref([])
 
 const savedStationId = localStorage.getItem('selectedStationId')
 const selectedStationId = ref(
-  stationOptions.some(item => item.id === savedStationId)
-    ? savedStationId
-    : '54823'
+  savedStationId || '54823'
 )
 const selectorOpen = ref(false)
 const realtime = ref({})
@@ -132,8 +124,14 @@ const chartRef = ref(null)
 let chartInstance = null
 
 const selectedStation = computed(() => {
-  return stationOptions.find(item => item.id === selectedStationId.value)
-    || stationOptions[0]
+  return (
+    stationOptions.value.find(
+      item => item.id === selectedStationId.value
+    ) || stationOptions.value[0] || {
+      id: selectedStationId.value,
+      name: '济南'
+    }
+  )
 })
 
 const elements = [
@@ -323,9 +321,27 @@ async function loadWeatherData() {
   }
 }
 
-onMounted(() => {
-  loadWeatherData()
-  window.addEventListener('resize', handleResize)
+async function loadStationOptions() {
+  try {
+    const response = await getStations()
+
+    stationOptions.value = response.data.map(
+      station => ({
+        id: station.station || station.id,
+        name: station.name
+      })
+    )
+  } catch (err) {
+    console.error(
+      '站点列表加载失败：',
+      err
+    )
+  }
+}
+
+onMounted(async () => {
+  await loadStationOptions()
+  await loadWeatherData()
 })
 
 onBeforeUnmount(() => {

@@ -180,7 +180,8 @@ def login(data: LoginRequest):
                 password,
                 nickname,
                 phone,
-                status
+                status,
+                role
             FROM sys_user
             WHERE username = ?
             """,
@@ -224,7 +225,8 @@ def login(data: LoginRequest):
                 "id": user.id,
                 "username": user.username,
                 "nickname": user.nickname,
-                "phone": user.phone
+                "phone": user.phone,
+                "role": user.role
             }
         }
 
@@ -257,7 +259,8 @@ def get_me(
                 last_address,
                 push_enable,
                 status,
-                create_time
+                create_time,
+                role
             FROM sys_user
             WHERE id = ?
             """,
@@ -283,12 +286,252 @@ def get_me(
             "last_address": user.last_address,
             "push_enable": user.push_enable,
             "status": user.status,
+            "role": user.role,
             "create_time": (
                 user.create_time.isoformat()
                 if user.create_time
                 else None
             )
         }
+
+    finally:
+        cursor.close()
+        conn.close()
+class PasswordUpdateRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class PhoneUpdateRequest(BaseModel):
+    phone: str
+
+
+@router.put("/phone")
+def update_phone(
+    data: PhoneUpdateRequest,
+    authorization: str = Header(default=None)
+):
+    user_id = get_token_user(authorization)
+    phone = data.phone.strip()
+
+    if len(phone) != 11 or not phone.isdigit():
+        raise HTTPException(
+            status_code=400,
+            detail="手机号格式不正确"
+        )
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            """
+            SELECT id
+            FROM sys_user
+            WHERE phone = ?
+              AND id <> ?
+            """,
+            phone,
+            user_id
+        )
+
+        if cursor.fetchone():
+            raise HTTPException(
+                status_code=400,
+                detail="该手机号已被其他账号使用"
+            )
+
+        cursor.execute(
+            """
+            UPDATE sys_user
+            SET phone = ?,
+                update_time = GETDATE()
+            WHERE id = ?
+            """,
+            phone,
+            user_id
+        )
+
+        if cursor.rowcount == 0:
+            raise HTTPException(
+                status_code=404,
+                detail="用户不存在"
+            )
+
+        conn.commit()
+
+        return {
+            "success": True,
+            "message": "手机号修改成功",
+            "phone": phone
+        }
+
+    except HTTPException:
+        conn.rollback()
+        raise
+
+    except Exception as e:
+        conn.rollback()
+        print("修改手机号失败：", e)
+
+        raise HTTPException(
+            status_code=500,
+            detail="手机号修改失败"
+        )
+
+    finally:
+        cursor.close()
+        conn.close()
+
+class LocationUpdateRequest(BaseModel):
+    lng: float
+    lat: float
+
+
+@router.put("/location")
+def update_location(
+    data: LocationUpdateRequest,
+    authorization: str = Header(default=None)
+):
+    user_id = get_token_user(authorization)
+
+    if not (-180 <= data.lng <= 180):
+        raise HTTPException(
+            status_code=400,
+            detail="经度不合法"
+        )
+
+    if not (-90 <= data.lat <= 90):
+        raise HTTPException(
+            status_code=400,
+            detail="纬度不合法"
+        )
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            """
+            UPDATE sys_user
+            SET last_lng = ?,
+                last_lat = ?,
+                update_time = GETDATE()
+            WHERE id = ?
+            """,
+            data.lng,
+            data.lat,
+            user_id
+        )
+
+        if cursor.rowcount == 0:
+            raise HTTPException(
+                status_code=404,
+                detail="用户不存在"
+            )
+
+        conn.commit()
+
+        return {
+            "success": True,
+            "message": "位置保存成功",
+            "lng": data.lng,
+            "lat": data.lat
+        }
+
+    except HTTPException:
+        conn.rollback()
+        raise
+
+    except Exception as e:
+        conn.rollback()
+        print("保存位置失败：", e)
+
+        raise HTTPException(
+            status_code=500,
+            detail="位置保存失败"
+        )
+
+    finally:
+        cursor.close()
+        conn.close()
+
+@router.put("/password")
+def update_password(
+    data: PasswordUpdateRequest,
+    authorization: str = Header(default=None)
+):
+    user_id = get_token_user(authorization)
+
+    if len(data.new_password) < 6:
+        raise HTTPException(
+            status_code=400,
+            detail="新密码至少6位"
+        )
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            """
+            SELECT password
+            FROM sys_user
+            WHERE id = ?
+            """,
+            user_id
+        )
+
+        user = cursor.fetchone()
+
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="用户不存在"
+            )
+
+        if not verify_password(
+            data.current_password,
+            user.password
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="当前密码错误"
+            )
+
+        new_password_hash = hash_password(
+                data.new_password
+            )
+
+        cursor.execute(
+            """
+            UPDATE sys_user
+            SET password = ?,
+                update_time = GETDATE()
+            WHERE id = ?
+            """,
+            new_password_hash,
+            user_id
+        )
+
+        conn.commit()
+
+        return {
+            "success": True,
+            "message": "密码修改成功"
+        }
+
+    except HTTPException:
+        conn.rollback()
+        raise
+
+    except Exception as e:
+        conn.rollback()
+        print("修改密码失败：", e)
+
+        raise HTTPException(
+            status_code=500,
+            detail="密码修改失败"
+        )
 
     finally:
         cursor.close()

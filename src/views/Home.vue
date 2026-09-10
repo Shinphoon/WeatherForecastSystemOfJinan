@@ -455,23 +455,9 @@
       import WeatherCard from '../components/WeatherCard.vue'
       import StationMap from '../components/StationMap.vue'
       import { getStations, getLatestWechatArticle, getForecast2h, getForecast24h, getGroundImage, getCurrentAlerts} from '../api/weather'
-
-      const stationOptions = [
-        { id:'54823', name:'济南' },
-        { id:'54727', name:'章丘' },
-        { id:'54816', name:'长清' },
-        { id:'54818', name:'平阴' },
-        { id:'54821', name:'济阳' },
-        { id:'54828', name:'莱芜' }
-      ]
-
+      const stationOptions = ref([])
       const savedStationId = localStorage.getItem('selectedStationId')
-      const selectedStationId = ref(
-        stationOptions.some(item => item.id === savedStationId)
-          ? savedStationId
-          : '54823'
-      )
-
+      const selectedStationId = ref(savedStationId || '54823')
       const selectorOpen = ref(false)
       const stationMapData = ref([])
       const hourlyForecast = ref([])
@@ -481,10 +467,16 @@
       const shortError = ref('')
 
       const selectedStation = computed(() => {
-        return stationOptions.find(
-          item => item.id === selectedStationId.value
-        ) || stationOptions[0]
-      })
+      return (
+        stationOptions.value.find(
+          item =>
+            item.id === selectedStationId.value
+        ) || {
+          id: selectedStationId.value,
+          name: '济南'
+            }
+          )
+        })
 
       const groundImageUrl = ref('')
       const groundImageTime = ref('')
@@ -590,9 +582,40 @@
       async function loadStations() {
         try {
           const response = await getStations()
+
           stationMapData.value = response.data
+
+          stationOptions.value =
+            response.data.map(
+              station => ({
+                id:
+                  station.station ||
+                  station.id,
+                name: station.name
+              })
+            )
+
+          const exists =
+            stationOptions.value.some(
+              item =>
+                item.id ===
+                selectedStationId.value
+            )
+
+          if (!exists) {
+            selectedStationId.value =
+              '54823'
+
+            localStorage.setItem(
+              'selectedStationId',
+              '54823'
+            )
+          }
         } catch (err) {
-          console.error('站点信息加载失败：', err)
+          console.error(
+            '站点信息加载失败：',
+            err
+          )
         }
       }
 

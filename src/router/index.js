@@ -52,6 +52,24 @@ const routes = [
     },
 
     {
+        path: '/security',
+        name: 'Security',
+        component: () => import('../views/Security.vue')
+    },
+
+    {
+        path: '/phone-setting',
+        name: 'PhoneSetting',
+        component: () => import('../views/PhoneSetting.vue')
+    },
+
+    {
+        path: '/location-setting',
+        name: 'LocationSetting',
+        component: () => import('../views/LocationSetting.vue')
+    },
+
+    {
         path: '/wechat-admin',
         name: 'WechatAdmin',
         component: () => import('../views/WechatAdmin.vue')

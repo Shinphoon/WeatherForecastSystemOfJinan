@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -10,6 +11,7 @@ from forecast_service import get_24h_forecast, get_2h_forecast, get_7d_forecast
 from ground_image_service import find_latest_ground_image
 from alert_service import (get_current_alert_summary,set_mock_alert,clear_mock_alert)
 from auth import router as auth_router
+from database import get_connection
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 ENV_PATH = BASE_DIR / ".env"
@@ -32,63 +34,72 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-STATIONS = [
-    {
-        "id": "54727",
-        "name": "章丘",
-        "lat": 36.68,
-        "lon": 117.53
-    },
-    {
-        "id": "54816",
-        "name": "长清",
-        "lat": 36.55,
-        "lon": 116.73
-    },
-    {
-        "id": "54818",
-        "name": "平阴",
-        "lat": 36.29,
-        "lon": 116.46
-    },
-    {
-        "id": "54821",
-        "name": "济阳",
-        "lat": 36.98,
-        "lon": 117.17
-    },
-    {
-        "id": "54823",
-        "name": "济南",
-        "lat": 36.65,
-        "lon": 117.12
-    },
-    {
-        "id": "54828",
-        "name": "莱芜",
-        "lat": 36.21,
-        "lon": 117.68
-    }
-]
+def load_stations():
+    conn = get_connection()
+    cursor = conn.cursor()
 
-VALID_STATIONS = {
-    station["id"]
-    for station in STATIONS
-}
+    try:
+        cursor.execute(
+            """
+            SELECT
+                station_id,
+                station_name,
+                lng,
+                lat,
+                altitude
+            FROM dbo.weather_station
+            WHERE status = 1
+            ORDER BY station_id
+            """
+        )
+
+        rows = cursor.fetchall()
+
+        return [
+            {
+                "id": str(row.station_id).strip(),
+                "name": row.station_name,
+                "lon": float(row.lng),
+                "lat": float(row.lat),
+                "alt": (
+                    float(row.altitude)
+                    if row.altitude is not None
+                    else None
+                )
+            }
+            for row in rows
+        ]
+
+    finally:
+        cursor.close()
+        conn.close()
+
 
 def check_station(station_id):
-    if station_id not in VALID_STATIONS:
+    stations = load_stations()
+
+    valid_stations = {
+        station["id"]
+        for station in stations
+    }
+
+    if station_id not in valid_stations:
         raise HTTPException(
             status_code=404,
             detail="未知气象站"
         )
 
+
 def get_station(station_id):
-    check_station(station_id)
-    return next(
-        station
-        for station in STATIONS
-        if station["id"] == station_id
+    stations = load_stations()
+
+    for station in stations:
+        if station["id"] == station_id:
+            return station
+
+    raise HTTPException(
+        status_code=404,
+        detail="未知气象站"
     )
 
 @app.get("/")
@@ -99,26 +110,18 @@ def root():
 
 @app.get("/weather/stations")
 def station_list():
-    result = []
-    for station in STATIONS:
-        try:
-            info = get_station_info(
-                station["id"]
-            )
-            if info.get("lat") is None:
-                info["lat"] = station["lat"]
-            if info.get("lon") is None:
-                info["lon"] = station["lon"]
-            result.append(info)
-        except Exception:
-            result.append({
-                "station": station["id"],
-                "name": station["name"],
-                "lat": station["lat"],
-                "lon": station["lon"],
-                "alt": None
-            })
-    return result
+    stations = load_stations()
+
+    return [
+        {
+            "station": station["id"],
+            "name": station["name"],
+            "lat": station["lat"],
+            "lon": station["lon"],
+            "alt": station["alt"]
+        }
+        for station in stations
+    ]
 
 @app.get("/weather/station/{station_id}/realtime")
 def station_realtime(station_id: str):
@@ -271,6 +274,12 @@ class WechatArticleUpdate(BaseModel):
     url: str
     password: str
 
+class StationCreate(BaseModel):
+    station_id: str
+    name: str
+    lat: float
+    lon: float
+    password: str
 
 @app.post("/weather/wechat/update")
 def update_latest_wechat_article(
@@ -297,3 +306,76 @@ def update_latest_wechat_article(
     return update_wechat_article_url(
         data.url
     )
+
+@app.post("/weather/stations/add")
+def add_station(data: StationCreate):
+    admin_password = os.getenv(
+        "WECHAT_ADMIN_PASSWORD"
+    )
+
+    if not admin_password:
+        return {
+            "success": False,
+            "error": "服务器未配置管理员密码"
+        }
+
+    if data.password != admin_password:
+        return {
+            "success": False,
+            "error": "管理员密码错误"
+        }
+
+    station_id = data.station_id.strip()
+    name = data.name.strip()
+
+    if not station_id.isdigit() or len(station_id) != 5:
+        return {
+            "success": False,
+            "error": "国家站站号必须是5位数字"
+        }
+
+    if not name:
+        return {
+            "success": False,
+            "error": "站点名称不能为空"
+        }
+
+    if not -90 <= data.lat <= 90:
+        return {
+            "success": False,
+            "error": "纬度必须在 -90 到 90 之间"
+        }
+
+    if not -180 <= data.lon <= 180:
+        return {
+            "success": False,
+            "error": "经度必须在 -180 到 180 之间"
+        }
+
+    stations = load_stations()
+
+    for station in stations:
+        if station["id"] == station_id:
+            return {
+                "success": False,
+                "error": "该国家站已经存在"
+            }
+
+    new_station = {
+        "id": station_id,
+        "name": name,
+        "lat": data.lat,
+        "lon": data.lon
+    }
+
+    stations.append(new_station)
+
+    save_stations(
+        stations
+    )
+
+    return {
+        "success": True,
+        "message": "国家站添加成功",
+        "station": new_station
+    }

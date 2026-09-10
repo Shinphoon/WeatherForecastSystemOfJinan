@@ -22,7 +22,9 @@
         <div class="nickname">{{ user.nickname || '天气用户' }}</div>
         <div class="username">@{{ user.username }}</div>
         <div class="user-tags">
-          <span>济南天气用户</span>
+          <span>
+            {{ user.role === 'admin' ? '系统管理员' : '济南天气用户' }}
+          </span>
           <span>ID {{ user.id || '--' }}</span>
         </div>
       </div>
@@ -90,7 +92,10 @@
     <section class="section">
       <div class="section-title">账号与位置</div>
       <div class="menu-card">
-        <div class="menu-item">
+        <router-link
+          to="/phone-setting"
+          class="menu-item admin-link"
+        >
           <div class="menu-left">
             <div class="menu-icon">📱</div>
             <div>
@@ -99,9 +104,12 @@
             </div>
           </div>
           <div class="arrow">›</div>
-        </div>
+        </router-link>
 
-        <div class="menu-item">
+        <router-link
+          to="/location-setting"
+          class="menu-item admin-link"
+        >
           <div class="menu-left">
             <div class="menu-icon">🗺</div>
             <div>
@@ -110,32 +118,40 @@
             </div>
           </div>
           <div class="arrow">›</div>
-        </div>
+        </router-link>
 
-        <div class="menu-item">
+        <router-link
+          to="/security"
+          class="menu-item admin-link">
           <div class="menu-left">
             <div class="menu-icon">🔐</div>
+
             <div>
               <div class="menu-name">账号安全</div>
               <div class="menu-desc">修改密码与登录信息</div>
             </div>
           </div>
+
           <div class="arrow">›</div>
-        </div>
+        </router-link>
       </div>
     </section>
 
     <section class="section">
       <div class="section-title">系统</div>
+
       <div class="menu-card">
         <div class="menu-item">
           <div class="menu-left">
             <div class="menu-icon">ℹ️</div>
             <div>
               <div class="menu-name">关于系统</div>
-              <div class="menu-desc">济南市天气实况与天气预报可视化系统</div>
+              <div class="menu-desc">
+                济南市天气实况与天气预报可视化系统
+              </div>
             </div>
           </div>
+
           <div class="arrow">›</div>
         </div>
 
@@ -144,11 +160,33 @@
             <div class="menu-icon">💬</div>
             <div>
               <div class="menu-name">意见反馈</div>
-              <div class="menu-desc">课程设计演示功能</div>
+              <div class="menu-desc">
+                课程设计演示功能
+              </div>
             </div>
           </div>
+
           <div class="arrow">›</div>
         </div>
+
+        <router-link
+          v-if="isLoggedIn && user.role === 'admin'"
+          to="/wechat-admin"
+          class="menu-item admin-link"
+        >
+          <div class="menu-left">
+            <div class="menu-icon">🛠</div>
+
+            <div>
+              <div class="menu-name">管理中心</div>
+              <div class="menu-desc">
+                管理国家站与公众号文章
+              </div>
+            </div>
+          </div>
+
+          <div class="arrow">›</div>
+        </router-link>
       </div>
     </section>
 
@@ -163,12 +201,21 @@
 
 <script setup>
 
-import { ref, computed, onMounted } from 'vue'
+import {
+  ref,
+  computed,
+  onMounted,
+  onActivated
+} from 'vue'
 import { useRouter } from 'vue-router'
 import {
   getCurrentUser,
   updatePushSetting
 } from '../api/auth'
+
+import {
+  getStations
+} from '../api/weather'
 
 const router = useRouter()
 const loading = ref(true)
@@ -184,24 +231,20 @@ const user = ref({
   create_time:''
 })
 
-const stationOptions = [
-  { id:'54823', name:'济南' },
-  { id:'54727', name:'章丘' },
-  { id:'54816', name:'长清' },
-  { id:'54818', name:'平阴' },
-  { id:'54821', name:'济阳' },
-  { id:'54828', name:'莱芜' }
-]
+const stationOptions = ref([])
 
 const selectedStationId = ref(
   localStorage.getItem('selectedStationId') || '54823'
 )
 
 const selectedStationName = computed(() => {
-  const station = stationOptions.find(
+  const station = stationOptions.value.find(
     item => item.id === selectedStationId.value
   )
-  return station ? station.name : '济南'
+
+  return station
+    ? station.name
+    : '济南'
 })
 
 const avatarText = computed(() => {
@@ -224,6 +267,38 @@ const pushSaving = ref(false)
 const radarEnabled = ref(
   localStorage.getItem('radarEnabled') !== 'false'
 )
+
+async function loadStationOptions() {
+  try {
+    const response = await getStations()
+
+    stationOptions.value = response.data.map(
+      station => ({
+        id: station.station || station.id,
+        name: station.name
+      })
+    )
+
+    const exists = stationOptions.value.some(
+      item =>
+        item.id === selectedStationId.value
+    )
+
+    if (!exists) {
+      selectedStationId.value = '54823'
+
+      localStorage.setItem(
+        'selectedStationId',
+        '54823'
+      )
+    }
+  } catch (err) {
+    console.error(
+      '站点列表加载失败：',
+      err
+    )
+  }
+}
 
 async function loadUser() {
   const token =
@@ -323,7 +398,14 @@ function logout() {
   router.push('/login')
 }
 
-onMounted(loadUser)
+onMounted(async () => {
+  await loadStationOptions()
+  await loadUser()
+})
+
+onActivated(async () => {
+  await loadUser()
+})
 </script>
 
 <style scoped>
@@ -577,13 +659,20 @@ onMounted(loadUser)
   cursor: pointer;
   box-shadow: 0 6px 18px rgba(15,23,42,.05);
 }
+
 .version {
   margin-top: 22px;
   text-align: center;
   color: #b0bac8;
   font-size: 10px;
 }
+
 .bottom-space {
   height: 20px;
+}
+
+.admin-link {
+  text-decoration: none;
+  color: inherit;
 }
 </style>
