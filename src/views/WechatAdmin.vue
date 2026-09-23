@@ -3,33 +3,12 @@
     <div class="admin-header">
       <div class="admin-title">拾风观象台 · 管理中心</div>
       <div class="admin-subtitle">
-        管理首页公众号文章与国家气象站
+        管理用户与账号状态、首页公众号文章和国家气象站
       </div>
     </div>
 
-    <!-- 管理员密码 -->
-    <div class="admin-card password-card">
-      <div class="section-heading">管理员验证</div>
-
-      <div class="form-group no-bottom">
-        <label class="form-label">管理员密码</label>
-
-        <input
-          v-model="password"
-          :type="showPassword ? 'text' : 'password'"
-          class="form-input"
-          placeholder="请输入管理员密码"
-        >
-
-        <button
-          type="button"
-          class="password-toggle"
-          @click="showPassword = !showPassword"
-        >
-          {{ showPassword ? '隐藏密码' : '显示密码' }}
-        </button>
-      </div>
-    </div>
+    <AdminUsers />
+    <FeedbackPanel admin />
 
     <!-- 公众号文章管理 -->
     <div class="section-title">
@@ -268,11 +247,13 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import AdminUsers from '../components/AdminUsers.vue'
+import FeedbackPanel from '../components/FeedbackPanel.vue'
 
 const BASE_URL = '/api'
 
-const password = ref('')
-const showPassword = ref(false)
+
+
 
 const articleUrl = ref('')
 const articleLoading = ref(false)
@@ -344,8 +325,6 @@ async function updateArticle() {
   articleSuccess.value = false
 
   const url = articleUrl.value.trim()
-  const adminPassword =
-    password.value.trim()
 
   if (!url) {
     articleMessage.value =
@@ -353,11 +332,6 @@ async function updateArticle() {
     return
   }
 
-  if (!adminPassword) {
-    articleMessage.value =
-      '请输入管理员密码'
-    return
-  }
 
   articleLoading.value = true
 
@@ -365,9 +339,8 @@ async function updateArticle() {
     const response = await axios.post(
       `${BASE_URL}/weather/wechat/update`,
       {
-        url: url,
-        password: adminPassword
-      }
+        url: url
+      }, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } }
     )
 
     const data = response.data
@@ -401,14 +374,7 @@ async function addStation() {
 
   const id = stationId.value.trim()
   const name = stationName.value.trim()
-  const adminPassword =
-    password.value.trim()
 
-  if (!adminPassword) {
-    stationMessage.value =
-      '请输入管理员密码'
-    return
-  }
 
   if (!id) {
     stationMessage.value =
@@ -469,9 +435,8 @@ async function addStation() {
         station_id: id,
         name: name,
         lat: lat,
-        lon: lon,
-        password: adminPassword
-      }
+        lon: lon
+      }, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } }
     )
 
     const data = response.data

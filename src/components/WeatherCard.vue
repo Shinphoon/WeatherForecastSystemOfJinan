@@ -62,17 +62,21 @@ const cleanWindSpeed = computed(() => {
     .replace(')', '')
 })
 
+let revision = 0
 async function loadWeather() {
+  const current = ++revision
   loading.value = true
   error.value = false
   try {
     const response = await getStationRealtimeWeather(props.stationId)
+    if (current !== revision) return
     weather.value = response.data
   } catch (err) {
+    if (current !== revision) return
     console.error('实时天气加载失败：', err)
     error.value = true
   } finally {
-    loading.value = false
+    if (current === revision) loading.value = false
   }
 }
 

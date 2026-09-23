@@ -10,8 +10,51 @@
 
     <section class="location-card">
       <div class="location-info">
-        <div>经度：{{ longitude ?? '--' }}</div>
-        <div>纬度：{{ latitude ?? '--' }}</div>
+        <div class="detail-row">
+          <span>当前位置</span>
+          <strong>
+            {{ address || '--' }}
+          </strong>
+        </div>
+
+        <div class="detail-row">
+          <span>经度</span>
+          <strong>
+            {{ longitude ?? '--' }}°
+          </strong>
+        </div>
+
+        <div class="detail-row">
+          <span>纬度</span>
+          <strong>
+            {{ latitude ?? '--' }}°
+          </strong>
+        </div>
+
+        <div class="detail-row">
+          <span>海拔</span>
+          <strong>
+            {{
+              altitude !== null
+                ? `${Math.round(altitude)} m`
+                : '--'
+            }}
+          </strong>
+        </div>
+
+        <div
+          v-if="nearestStation"
+          class="detail-row"
+        >
+          <span>最近国家站</span>
+
+          <strong>
+            {{ nearestStation.name }}
+            {{ nearestStation.id }}
+            ·
+            {{ nearestStation.distance_km }} km
+          </strong>
+        </div>
       </div>
 
       <div
@@ -41,14 +84,17 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref,onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { updateLocation } from '../api/auth'
+import { updateLocation,getCurrentUser } from '../api/auth'
 
 const router = useRouter()
 
 const longitude = ref(null)
 const latitude = ref(null)
+const altitude = ref(null)
+const address = ref('')
+const nearestStation = ref(null)
 
 const locating = ref(false)
 const saving = ref(false)
@@ -105,18 +151,82 @@ async function saveLocation() {
       latitude.value
     )
 
+    const data = response.data
+
+    altitude.value =
+      data.alt ?? null
+
+    address.value =
+      data.address || ''
+
+    nearestStation.value =
+      data.nearest_station || null
+
+    localStorage.setItem(
+      'syncedUserLocation',
+      JSON.stringify({
+        lng: data.lng,
+        lat: data.lat,
+        alt: data.alt ?? null,
+        address: data.address || '',
+        nearestStation:
+          data.nearest_station || null
+      })
+    )
+
+    if (data.nearest_station?.id) {
+      localStorage.setItem(
+        'selectedStationId',
+        data.nearest_station.id
+      )
+    }
+
     success.value = true
+
     message.value =
-      response.data.message || '位置保存成功'
+      data.message ||
+      '位置保存成功'
 
   } catch (err) {
     success.value = false
+
     message.value =
-      err.response?.data?.detail || '位置保存失败'
+      err.response?.data?.detail ||
+      '位置保存失败'
+
   } finally {
     saving.value = false
   }
 }
+
+async function loadSavedLocation() {
+  try {
+    const response =
+      await getCurrentUser()
+
+    longitude.value =
+      response.data.last_lng
+
+    latitude.value =
+      response.data.last_lat
+
+    altitude.value =
+      response.data.last_alt
+
+    address.value =
+      response.data.last_address || ''
+
+  } catch (err) {
+    console.error(
+      '读取位置失败：',
+      err
+    )
+  }
+}
+
+onMounted(() => {
+  loadSavedLocation()
+})
 </script>
 
 <style scoped>
@@ -216,5 +326,28 @@ async function saveLocation() {
 button:disabled {
   opacity: .6;
   cursor: not-allowed;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 0;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row span {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.detail-row strong {
+  color: #1e293b;
+  font-size: 13px;
+  text-align: right;
 }
 </style>

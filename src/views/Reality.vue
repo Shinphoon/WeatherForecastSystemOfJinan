@@ -7,16 +7,7 @@
           <button class="station-selector" @click="selectorOpen = !selectorOpen">
             {{ selectedStation.name }}国家气象站 · {{ selectedStation.id }} ▼
           </button>
-          <div v-if="selectorOpen" class="station-menu">
-            <button
-              v-for="station in stationOptions"
-              :key="station.id"
-              :class="{ selected: station.id === selectedStationId }"
-              @click="selectStation(station)"
-            >
-              {{ station.name }} · {{ station.id }}
-            </button>
-          </div>
+<CityStationMenu v-if="selectorOpen" :stations="stationOptions" :selected-id="selectedStationId" @select="selectStation" />
         </div>
       </div>
       <div class="live-badge">
@@ -60,9 +51,22 @@
           <p>{{ selectedStation.name }}站 · 近24小时逐小时观测</p>
         </div>
       </div>
-      <div v-if="chartLoading" class="chart-message">正在加载图表...</div>
-      <div v-else-if="error" class="chart-message">暂无可用数据</div>
-      <div v-else ref="chartRef" class="chart"></div>
+      <div v-if="chartLoading" class="chart-message">
+        正在加载图表...
+      </div>
+
+      <div
+        v-else-if="historyData.length === 0"
+        class="chart-message"
+      >
+        暂无近24小时历史数据
+      </div>
+
+      <div
+        v-else
+        ref="chartRef"
+        class="chart"
+      ></div>
     </section>
 
     <section class="detail-card">
@@ -94,13 +98,51 @@
         </div>
       </div>
     </section>
+    <GroundProducts v-if="isInZibo || productCities.has(selectedStation.city)" :key="isInZibo ? 'zibo' : 'jinan'" :city="isInZibo ? 'zibo' : 'jinan'" />
+    <section class="chart-card">
+      <h2>实况雷达地图</h2>
+      <p v-if="mapError" class="error">{{ mapError }}</p>
+      <StationMap :stations="mapStations" :selected-station-id="selectedStationId" :user-location="mapLocation" @select="selectMapStation" @location-change="saveMapLocation" />
+    </section>
     <div class="bottom-space"></div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, onBeforeUnmount } from 'vue'
-import * as echarts from 'echarts'
+import GroundProducts from '../components/GroundProducts.vue'
+import ziboBoundary from '../data/ziboBoundary.json'
+import { insidePolygons } from '../map/weatherInterpolation'
+const ziboPolygons = ziboBoundary.features.flatMap(f => f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates)
+const isInZibo = computed(() => {
+  const { lng, lat } = mapLocation.value
+  return lng != null && lat != null && Number.isFinite(Number(lng)) && Number.isFinite(Number(lat)) && insidePolygons(Number(lng), Number(lat), ziboPolygons)
+})
+import StationMap from '../components/StationMap.vue'
+import { updateLocation } from '../api/auth'
+const mapStations = ref([])
+const mapLocation = ref({ lng: null, lat: null })
+const mapError = ref('')
+function selectMapStation(station) { selectedStationId.value = String(station.station || station.id) }
+async function saveMapLocation(location) {
+  try {
+    const { data } = await updateLocation(location.lng, location.lat)
+    mapLocation.value = { ...data, nearestStation: data.nearest_station }
+    localStorage.setItem('syncedUserLocation', JSON.stringify(mapLocation.value))
+    mapError.value = ''
+  } catch { mapError.value = '位置保存失败，请登录后重试'; mapLocation.value = { ...mapLocation.value } }
+}
+onActivated(() => {
+  try { mapLocation.value = JSON.parse(localStorage.getItem('syncedUserLocation') || 'null') || { lng: null, lat: null } } catch { mapLocation.value = { lng: null, lat: null } }
+})
+import CityStationMenu from '../components/CityStationMenu.vue'
+import { normalizeStation } from '../data/stationCities'
+import { selectedStationId, productCities } from '../data/stationSelection'
+import { ref, computed, onMounted, watch, onActivated, onDeactivated, nextTick, onBeforeUnmount } from 'vue'
+import * as echarts from 'echarts/core'
+import { LineChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 import {
   getStations,
   getStationRealtimeWeather,
@@ -109,10 +151,7 @@ import {
 
 const stationOptions = ref([])
 
-const savedStationId = localStorage.getItem('selectedStationId')
-const selectedStationId = ref(
-  savedStationId || '54823'
-)
+
 const selectorOpen = ref(false)
 const realtime = ref({})
 const historyData = ref([])
@@ -280,26 +319,31 @@ async function selectStation(station) {
   selectedStationId.value = station.id
   selectorOpen.value = false
   localStorage.setItem('selectedStationId', station.id)
-  await loadWeatherData()
 }
 
 function handleResize() {
   if (chartInstance) chartInstance.resize()
 }
 
+let weatherRevision = 0
 async function loadWeatherData() {
+  const revision = ++weatherRevision
+  const stationId = selectedStationId.value
   try {
     loading.value = true
     chartLoading.value = true
     error.value = false
 
     const [realtimeResponse, todayResponse] = await Promise.all([
-      getStationRealtimeWeather(selectedStationId.value),
-      getStationTodayWeather(selectedStationId.value)
+      getStationRealtimeWeather(stationId),
+      getStationTodayWeather(stationId)
     ])
 
+    if (revision !== weatherRevision || stationId !== selectedStationId.value) return
     realtime.value = realtimeResponse.data
-    historyData.value = todayResponse.data
+    historyData.value = Array.isArray(todayResponse.data)
+      ? todayResponse.data
+      : []
     chartLoading.value = false
 
     await nextTick()
@@ -309,15 +353,18 @@ async function loadWeatherData() {
       chartInstance = null
     }
 
-    drawChart()
+    if (historyData.value.length > 0) {
+  drawChart()
+}
   } catch (err) {
+    if (revision !== weatherRevision || stationId !== selectedStationId.value) return
     console.error(`${selectedStation.value.name}站实况数据加载失败：`, err)
     realtime.value = {}
     historyData.value = []
     error.value = true
     chartLoading.value = false
   } finally {
-    loading.value = false
+    if (revision === weatherRevision) loading.value = false
   }
 }
 
@@ -325,12 +372,8 @@ async function loadStationOptions() {
   try {
     const response = await getStations()
 
-    stationOptions.value = response.data.map(
-      station => ({
-        id: station.station || station.id,
-        name: station.name
-      })
-    )
+    mapStations.value = response.data
+    stationOptions.value = response.data.map(normalizeStation)
   } catch (err) {
     console.error(
       '站点列表加载失败：',
@@ -339,10 +382,10 @@ async function loadStationOptions() {
   }
 }
 
-onMounted(async () => {
-  await loadStationOptions()
-  await loadWeatherData()
-})
+const pageActive = ref(false)
+onActivated(() => { pageActive.value = true; loadStationOptions(); loadWeatherData(); window.addEventListener('resize', handleResize) })
+onDeactivated(() => { pageActive.value = false; window.removeEventListener('resize', handleResize) })
+watch(selectedStationId, () => { if (pageActive.value) loadWeatherData() })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)

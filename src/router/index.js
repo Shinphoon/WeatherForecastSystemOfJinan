@@ -1,13 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Home from '../views/Home.vue'
-import Reality from '../views/Reality.vue'
-import Forecast from '../views/Forecast.vue'
-import Mine from '../views/Mine.vue'
-import Radar from '../views/Radar.vue'
-import Login from '../views/Login.vue'
-import Register from '../views/Register.vue'
+const Reality = () => import('../views/Reality.vue')
+const Forecast = () => import('../views/Forecast.vue')
+const Mine = () => import('../views/Mine.vue')
+const Radar = () => import('../views/Radar.vue')
+const Login = () => import('../views/Login.vue')
+const Register = () => import('../views/Register.vue')
 
 const routes = [
+    { path: '/feedback', component: () => import('../views/Feedback.vue') },
 
     {
         path: '/',
@@ -73,6 +74,13 @@ const routes = [
         path: '/wechat-admin',
         name: 'WechatAdmin',
         component: () => import('../views/WechatAdmin.vue')
+    },
+
+    {
+        path: '/email-setting',
+        name: 'EmailSetting',
+        component: () =>
+            import('../views/EmailSetting.vue')
     }
 ]
 

@@ -58,7 +58,22 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { syncDailyBriefing } from './api/notifications'
+
+const route = useRoute()
+watch(() => route.fullPath, () => syncDailyBriefing(), { immediate: true })
+let briefingTimer
+const refreshBriefing = () => { if (!document.hidden) syncDailyBriefing() }
+onMounted(() => {
+    briefingTimer = setInterval(refreshBriefing, 60000)
+    window.addEventListener('focus', refreshBriefing)
+})
+onUnmounted(() => {
+    clearInterval(briefingTimer)
+    window.removeEventListener('focus', refreshBriefing)
+})
 
 const confetti = ref([])
 const ripples = ref([])

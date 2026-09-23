@@ -20,6 +20,15 @@
             <label>手机号</label>
             <input v-model.trim="form.phone" type="text" maxlength="11" placeholder="请输入手机号">
           </div>
+          <div class="form-group">
+            <label class="form-label">邮箱</label>
+            <input
+              v-model="email"
+              type="email"
+              class="form-input"
+              placeholder="请输入邮箱，可选"
+            >
+          </div>
           <div class="form-item">
             <label>密码</label>
             <input v-model="form.password" type="password" placeholder="至少6位">
@@ -76,6 +85,7 @@ const form = reactive({
   phone: '',
   password: '',
   confirmPassword: '',
+  email:'',
   captcha: '',
   agree: false
 })
@@ -137,7 +147,8 @@ async function handleRegister() {
       username: form.username,
       nickname: form.nickname,
       phone: form.phone,
-      password: form.password
+      password: form.password,
+      email: email.value.trim() || null
     })
 
     successText.value =

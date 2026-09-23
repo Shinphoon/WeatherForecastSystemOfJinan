@@ -7,11 +7,7 @@
       </div>
       <div class="station-wrap">
         <button class="station-badge" @click="selectorOpen = !selectorOpen">📍 {{ selectedStation.name }} ▼</button>
-        <div v-if="selectorOpen" class="station-menu">
-          <button v-for="station in stationOptions" :key="station.id" :class="{selected:station.id===selectedStationId}" @click="selectStation(station)">
-            {{ station.name }} · {{ station.id }}
-          </button>
-        </div>
+<CityStationMenu v-if="selectorOpen" :stations="stationOptions" :selected-id="selectedStationId" @select="selectStation" />
       </div>
     </header>
 
@@ -90,7 +86,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import CityStationMenu from '../components/CityStationMenu.vue'
+import { normalizeStation } from '../data/stationCities'
+import { selectedStationId, productCities } from '../data/stationSelection'
+import { ref, computed, onMounted, watch, onActivated, onDeactivated } from 'vue'
 import {
   getStations,
   getForecast2h,
@@ -99,8 +98,7 @@ import {
 } from '../api/weather'
 
 const stationOptions = ref([])
-const savedStationId = localStorage.getItem('selectedStationId')
-const selectedStationId = ref(savedStationId || '54823')
+
 const selectorOpen = ref(false)
 
 const selectedStation = computed(() => {
@@ -184,25 +182,34 @@ const maxWindSpeed = computed(()=>{
   return v.length?Math.max(...v).toFixed(1):'--'
 })
 
+let loadForecast2hRevision = 0
 async function loadForecast2h() {
+  const revision = ++loadForecast2hRevision
+  const stationId = selectedStationId.value
   shortLoading.value=true
   shortError.value=''
   try {
-    const {data}=await getForecast2h(selectedStationId.value)
+    const {data}=await getForecast2h(stationId)
+    if (revision !== loadForecast2hRevision || stationId !== selectedStationId.value) return
     shortForecastText.value=data.text||'暂无短时天气预报数据'
     if (data.hours?.length) shortForecastIcon.value=getWeatherIcon(data.hours[0].weather_code)
   } catch (error) {
+    if (revision !== loadForecast2hRevision || stationId !== selectedStationId.value) return
     console.error('短时天气加载失败：',error)
     shortError.value='短时天气预报加载失败'
   } finally {
-    shortLoading.value=false
+    if (revision === loadForecast2hRevision) shortLoading.value=false
   }
 }
+let loadForecast24hRevision = 0
 async function loadForecast24h() {
+  const revision = ++loadForecast24hRevision
+  const stationId = selectedStationId.value
   hourlyLoading.value=true
   hourlyError.value=''
   try {
-    const {data}=await getForecast24h(selectedStationId.value)
+    const {data}=await getForecast24h(stationId)
+    if (revision !== loadForecast24hRevision || stationId !== selectedStationId.value) return
     hourlyForecast.value=data.map(item=>({
       fullTime:item.time,
       time:formatHour(item.time),
@@ -219,18 +226,23 @@ async function loadForecast24h() {
       windDirection:item.wind_direction??0
     }))
   } catch (error) {
+    if (revision !== loadForecast24hRevision || stationId !== selectedStationId.value) return
     console.error('24小时天气加载失败：',error)
     hourlyForecast.value=[]
     hourlyError.value='24小时天气预报加载失败'
   } finally {
-    hourlyLoading.value=false
+    if (revision === loadForecast24hRevision) hourlyLoading.value=false
   }
 }
+let loadForecast7dRevision = 0
 async function loadForecast7d() {
+  const revision = ++loadForecast7dRevision
+  const stationId = selectedStationId.value
   dailyLoading.value=true
   dailyError.value=''
   try {
-    const {data}=await getForecast7d(selectedStationId.value)
+    const {data}=await getForecast7d(stationId)
+    if (revision !== loadForecast7dRevision || stationId !== selectedStationId.value) return
     sevenDayForecast.value=data.map((item,index)=>({
       fullDate:item.date,
       week:getWeekday(item.date,index),
@@ -245,11 +257,12 @@ async function loadForecast7d() {
       maxWind:item.wind_speed_max??0
     }))
   } catch (error) {
+    if (revision !== loadForecast7dRevision || stationId !== selectedStationId.value) return
     console.error('7天天气加载失败：',error)
     sevenDayForecast.value=[]
     dailyError.value='7天天气预报加载失败'
   } finally {
-    dailyLoading.value=false
+    if (revision === loadForecast7dRevision) dailyLoading.value=false
   }
 }
 async function loadAllForecasts() {
@@ -259,34 +272,14 @@ function selectStation(station) {
   selectedStationId.value=station.id
   selectorOpen.value=false
   localStorage.setItem('selectedStationId',station.id)
-  loadAllForecasts()
 }
 
 async function loadStationOptions() {
   try {
     const response = await getStations()
 
-    stationOptions.value = response.data.map(
-      station => ({
-        id: station.station || station.id,
-        name: station.name
-      })
-    )
+    stationOptions.value = response.data.map(normalizeStation)
 
-    const stationExists =
-      stationOptions.value.some(
-        item =>
-          item.id === selectedStationId.value
-      )
-
-    if (!stationExists) {
-      selectedStationId.value = '54823'
-
-      localStorage.setItem(
-        'selectedStationId',
-        '54823'
-      )
-    }
   } catch (err) {
     console.error(
       '站点列表加载失败：',
@@ -295,10 +288,10 @@ async function loadStationOptions() {
   }
 }
 
-onMounted(async () => {
-  await loadStationOptions()
-  await loadAllForecasts()
-})
+const pageActive = ref(false)
+onActivated(() => { pageActive.value = true; loadStationOptions(); loadAllForecasts() })
+onDeactivated(() => { pageActive.value = false })
+watch(selectedStationId, () => { if (pageActive.value) loadAllForecasts() })
 </script>
 
 <style scoped>

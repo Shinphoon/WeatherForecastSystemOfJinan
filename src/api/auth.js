@@ -101,3 +101,20 @@ export function updateLocation(lng, lat) {
     }
   )
 }
+
+export function updateEmail(email) {
+  const token =
+    localStorage.getItem('access_token')
+
+  return axios.put(
+    `${BASE_URL}/auth/email`,
+    {
+      email: email
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  )
+}

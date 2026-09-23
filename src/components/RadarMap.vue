@@ -112,18 +112,36 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import Map from 'ol/Map'
 import View from 'ol/View'
 import TileLayer from 'ol/layer/Tile'
 import OSM from 'ol/source/OSM'
 import XYZ from 'ol/source/XYZ'
-import { fromLonLat } from 'ol/proj'
+import { fromLonLat,toLonLat } from 'ol/proj'
 import 'ol/ol.css'
 import VectorLayer from 'ol/layer/Vector'
 import VectorSource from 'ol/source/Vector'
 import GeoJSON from 'ol/format/GeoJSON'
-import { Style, Stroke, Fill } from 'ol/style'
+import { Style, Stroke, Fill, Circle, Text } from 'ol/style'
+import Feature from 'ol/Feature'
+import Point from 'ol/geom/Point'
+import Collection from 'ol/Collection'
+import Translate from 'ol/interaction/Translate'
+
+const props = defineProps({
+  userLocation: {
+    type: Object,
+    default: () => ({
+      lng: null,
+      lat: null
+    })
+  }
+})
+
+const emit = defineEmits([
+  'location-change'
+])
 
 const mapContainer = ref(null)
 const radarFrames = ref([])
@@ -141,6 +159,11 @@ let preloadLayer = null
 let boundaryLayer = null
 let playTimer = null
 let rainViewerHost = ''
+let userSource = null
+let userLayer = null
+let userFeature = null
+let userFeatures = null
+let translateInteraction = null
 
 const currentFrame = computed(() => {
   if (radarFrames.value.length === 0) return null
@@ -291,6 +314,102 @@ function toggleBoundary() {
   }
 }
 
+function createUserStyle() {
+  return new Style({
+    image: new Circle({
+      radius: 10,
+
+      fill: new Fill({
+        color: '#2563eb'
+      }),
+
+      stroke: new Stroke({
+        color: '#ffffff',
+        width: 4
+      })
+    }),
+
+    text: new Text({
+      text: '我的位置',
+      offsetY: -25,
+      font: 'bold 13px sans-serif',
+
+      fill: new Fill({
+        color: '#2563eb'
+      }),
+
+      stroke: new Stroke({
+        color: '#ffffff',
+        width: 4
+      })
+    })
+  })
+}
+
+
+function renderUserLocation() {
+  if (!userSource) {
+    return
+  }
+
+  if (
+    props.userLocation?.lng === null ||
+    props.userLocation?.lng === undefined ||
+    props.userLocation?.lat === null ||
+    props.userLocation?.lat === undefined
+  ) {
+    return
+  }
+
+  const lng =
+    Number(props.userLocation.lng)
+
+  const lat =
+    Number(props.userLocation.lat)
+
+  if (
+    !Number.isFinite(lng) ||
+    !Number.isFinite(lat)
+  ) {
+    return
+  }
+
+  const coordinates =
+    fromLonLat([
+      lng,
+      lat
+    ])
+
+  if (!userFeature) {
+    userFeature =
+      new Feature({
+        geometry:
+          new Point(
+            coordinates
+          )
+      })
+
+    userFeature.setStyle(
+      createUserStyle()
+    )
+
+    userSource.addFeature(
+      userFeature
+    )
+
+    userFeatures.push(
+      userFeature
+    )
+
+  } else {
+    userFeature
+      .getGeometry()
+      .setCoordinates(
+        coordinates
+      )
+  }
+}
+
 function createBoundaryLayer() {
   boundaryLayer = new VectorLayer({
     source: new VectorSource({
@@ -372,6 +491,18 @@ async function loadRadarData() {
 }
 
 onMounted(() => {
+  userSource =
+    new VectorSource()
+
+  userFeatures =
+    new Collection()
+
+  userLayer =
+    new VectorLayer({
+      source: userSource,
+      zIndex: 20
+    })
+
   const osmLayer = new TileLayer({
     source: new OSM(),
     zIndex: 0
@@ -396,7 +527,8 @@ onMounted(() => {
       osmLayer,
       preloadLayer,
       radarLayer,
-      boundaryLayer
+      boundaryLayer,
+      userLayer
     ],
     view: new View({
       center: fromLonLat([
@@ -408,9 +540,62 @@ onMounted(() => {
       maxZoom: 12
     })
   })
+  translateInteraction = new Translate({ features: userFeatures })
+
+  map.addInteraction(
+    translateInteraction
+  )
+
+  translateInteraction.on(
+    'translateend',
+    () => {
+
+      if (!userFeature) {
+        return
+      }
+
+      const coordinates =
+        userFeature
+          .getGeometry()
+          .getCoordinates()
+
+      const [
+        lng,
+        lat
+      ] = toLonLat(
+        coordinates
+      )
+
+      emit(
+        'location-change',
+        {
+          lng,
+          lat
+        }
+      )
+    }
+  )
+
+  renderUserLocation()
 
   loadRadarData()
 })
+
+watch(
+  () => props.userLocation,
+  () => {
+    console.log(
+      'RadarMap收到新定位：',
+      props.userLocation
+    )
+
+    renderUserLocation()
+  },
+  {
+    deep: true,
+    immediate: true
+  }
+)
 
 onBeforeUnmount(() => {
   stopPlay()

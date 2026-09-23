@@ -31,6 +31,9 @@ src/backend/venv/
 !.env.example
 
 # Python cache
+src/backend/daily_briefings.sqlite3*
+src/backend/feedback.sqlite3*
+src/backend/saved_locations.sqlite3*
 .pytest_cache/
 .mypy_cache/
 

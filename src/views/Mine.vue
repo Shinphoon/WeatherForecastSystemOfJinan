@@ -58,7 +58,7 @@
           <div class="menu-left">
             <div class="menu-icon">🔔</div>
             <div>
-              <div class="menu-name">天气预警推送</div>
+              <div class="menu-name">天气预警与早报推送</div>
               <div class="menu-desc">接收济南市气象预警信息</div>
             </div>
           </div>
@@ -103,6 +103,24 @@
               <div class="menu-desc">{{ maskedPhone }}</div>
             </div>
           </div>
+
+          <div class="arrow">›</div>
+        </router-link>
+
+        <router-link
+          to="/email-setting"
+          class="menu-item admin-link"
+        >
+          <div class="menu-left">
+            <div class="menu-icon">✉️</div>
+            <div>
+              <div class="menu-name">邮箱与天气报告</div>
+              <div class="menu-desc">
+                {{ user.email || '暂未绑定邮箱' }}
+              </div>
+            </div>
+          </div>
+
           <div class="arrow">›</div>
         </router-link>
 
@@ -155,19 +173,19 @@
           <div class="arrow">›</div>
         </div>
 
-        <div class="menu-item">
+        <router-link to="/feedback" class="menu-item admin-link">
           <div class="menu-left">
             <div class="menu-icon">💬</div>
             <div>
               <div class="menu-name">意见反馈</div>
               <div class="menu-desc">
-                课程设计演示功能
+                提交问题与建议，查看处理进度
               </div>
             </div>
           </div>
 
           <div class="arrow">›</div>
-        </div>
+        </router-link>
 
         <router-link
           v-if="isLoggedIn && user.role === 'admin'"
@@ -180,7 +198,7 @@
             <div>
               <div class="menu-name">管理中心</div>
               <div class="menu-desc">
-                管理国家站与公众号文章
+                管理用户、意见反馈、国家站与公众号文章
               </div>
             </div>
           </div>

@@ -4,7 +4,7 @@
     <!-- 顶部标题 -->
     <header class="top-header">
       <div>
-        <h1>济南市</h1>
+        <h1>山东省</h1>
         <p>天气实况与预报</p>
       </div>
 
@@ -26,43 +26,163 @@
         </button>
 
 
-        <div
-            v-if="selectorOpen"
-            class="station-menu"
-        >
-
-            <button
-            v-for="station in stationOptions"
-            :key="station.id"
-            @click="
-                selectStation(
-                station
-                )
-            "
-            >
-            {{ station.name }}
-
-            <span>
-                {{ station.id }}
-            </span>
-
+        <div v-if="selectorOpen" class="station-menu">
+          <div class="city-selection">
+            <label for="station-city">先选地级市</label>
+            <select id="station-city" v-model="selectedCity">
+              <option v-for="city in stationCities" :key="city" :value="city">{{ city }}</option>
+            </select>
+            <small>再选国家站 · {{ cityStations.length }} 个站点</small>
+          </div>
+          <div class="city-stations">
+            <button v-for="station in cityStations" :key="station.id" @click="selectStation(station)"
+              :class="{ 'selected-station': station.id === selectedStationId }">
+              {{ station.name }}<span>{{ station.id }}</span>
             </button>
-
+            <p v-if="!cityStations.length">暂无站点</p>
+          </div>
         </div>
 
         </div>
     </header>
-
+    <SavedLocations :current-location="userLocation" @selected="applySavedLocation" />
 
     <!-- 实时天气卡片 -->
+    <section class="section">
+      <div class="section-title">
+        <span>我的位置</span>
+
+        <button
+          class="relocate-btn"
+          @click="locateUser"
+        >
+          重新定位
+        </button>
+      </div>
+
+      <div class="user-location-card">
+
+        <div
+          v-if="locationLoading"
+          class="location-status"
+        >
+          📍 正在获取当前位置...
+        </div>
+
+        <div
+          v-else-if="locationError"
+          class="location-status location-error"
+        >
+          {{ locationError }}
+        </div>
+
+        <template
+          v-else-if="userLocation.lat !== null"
+        >
+          <div class="current-place">
+          <div class="current-place-icon">
+            📍
+          </div>
+
+          <div>
+            <div class="current-place-label">
+              您当前位于
+            </div>
+
+            <div class="current-place-name">
+              {{
+                userLocation.address ||
+                '正在识别当前位置'
+              }}
+            </div>
+          </div>
+        </div>
+
+          <div
+            v-if="userLocation.nearestStation"
+            class="nearest-station"
+          >
+            <div>
+              最近国家站
+            </div>
+
+            <strong>
+              {{
+                userLocation.nearestStation.name
+              }}
+              {{
+                userLocation.nearestStation.id
+              }}
+            </strong>
+
+            <span>
+              距您约
+              {{
+                userLocation.nearestStation
+                  .distance_km
+              }}
+              km
+            </span>
+          </div>
+        </template>
+
+      </div>
+    </section>
     <section class="section">
       <WeatherCard
         :station-id="selectedStationId"
         :station-name="selectedStation.name"
         />
     </section>
+    <!-- 雷达降雨临近提醒 -->
+    <section
+      v-if="showRadarReminder"
+      class="section"
+    >
+      <router-link
+        to="/radar"
+        class="radar-home-alert"
+        :class="
+          radarStatus.status === 'raining'
+            ? 'radar-raining'
+            : 'radar-approaching'
+        "
+      >
+        <div class="radar-alert-icon">
+          🌧
+        </div>
 
+        <div class="radar-alert-content">
 
+          <div class="radar-alert-title">
+            {{
+              radarStatus.status === 'raining'
+                ? '当前位置已进入降水回波影响范围'
+                : `预计约 ${radarStatus.eta_minutes} 分钟后可能出现降雨`
+            }}
+          </div>
+
+          <div class="radar-alert-desc">
+            <template
+              v-if="radarStatus.status === 'raining'"
+            >
+              雷达监测到当前位置附近存在降水回波
+            </template>
+
+            <template v-else>
+              最近回波距您约
+              {{ radarStatus.distance_km }} km
+              · 正在接近
+            </template>
+          </div>
+
+        </div>
+
+        <div class="radar-alert-arrow">
+          ›
+        </div>
+      </router-link>
+    </section>
     <!-- 天气预警 -->
     <section class="section">
       <div class="section-title">
@@ -92,7 +212,7 @@
         <div class="warning-content">
           <div class="warning-title-row">
             <div class="warning-title">
-              {{ alertData.latest.title }}
+              {{ withoutJinan(alertData.latest.title) }}
             </div>
 
             <span
@@ -112,7 +232,7 @@
             v-if="alertData.latest.sender"
             class="warning-meta"
           >
-            发布单位：{{ alertData.latest.sender }}
+            发布单位：{{ withoutJinan(alertData.latest.sender) }}
           </div>
 
           <div
@@ -126,11 +246,11 @@
             v-if="alertData.latest.description"
             class="warning-description"
           >
-            {{ alertData.latest.description }}
+            {{ withoutJinan(alertData.latest.description) }}
           </div>
 
           <div class="warning-time">
-            当前共有 {{ alertData.count }} 条济南地区预警
+            当前共有 {{ alertData.count }} 条生效预警
           </div>
         </div>
       </div>
@@ -147,52 +267,12 @@
           </div>
 
           <div class="warning-desc">
-            如有新的济南市气象预警，将在此处显示
+            如有新的气象预警，将在此处显示
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 过去1小时降水实况图 -->
-    <section class="section">
-      <div class="section-title">
-        <span>过去1小时降水实况图</span>
-        <router-link to="/reality" class="more">
-          查看实况
-        </router-link>
-      </div>
-
-      <div class="ground-image-card">
-        <div
-          v-if="groundImageLoading && !groundImageUrl"
-          class="ground-image-loading"
-        >
-          正在加载降水实况图...
-        </div>
-
-        <img
-          v-else-if="groundImageUrl"
-          :src="groundImageUrl"
-          class="ground-image"
-          alt="济南市过去1小时降水实况图"
-        >
-
-        <div
-          v-else
-          class="ground-image-loading"
-        >
-          暂无过去1小时降水实况图
-        </div>
-
-        <div
-          v-if="groundImageTime"
-          class="ground-image-info"
-        >
-          <span>过去1小时累计降水</span>
-          <span>统计时段：{{ groundImageTime }}</span>
-        </div>
-      </div>
-    </section>
 
     <!-- WebGIS 地图入口 -->
     <section class="section">
@@ -203,16 +283,15 @@
         </router-link>
       </div>
 
-      <router-link
-        to="/reality"
-        class="map-card"
-      >
+      <div class="map-card">
         <StationMap
           :stations="stationMapData"
           :selected-station-id="selectedStationId"
+          :user-location="userLocation"
           @select="selectStation"
+          @location-change="handleMapLocationChange"
         />
-      </router-link>
+      </div>
     </section>
 
         <!-- 拾风观象台最新推文 -->
@@ -442,7 +521,12 @@
       </div>
 
     </section>
-
+    <AiChatBot
+      :alert-data="alertData"
+      :alert-loading="alertLoading"
+      :station-id="selectedStationId"
+      :user-location="userLocation"
+    />
 
     <!-- 底部留白，避免被导航栏遮挡 -->
     <div class="bottom-space"></div>
@@ -451,14 +535,23 @@
 </template>
 
 <script setup>
-      import { ref, computed, watch, onMounted, onUnmounted, onActivated} from 'vue'
+import { selectedStationId, productCities } from '../data/stationSelection'
+      import { ref, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated} from 'vue'
       import WeatherCard from '../components/WeatherCard.vue'
+      import SavedLocations from '../components/SavedLocations.vue'
       import StationMap from '../components/StationMap.vue'
-      import { getStations, getLatestWechatArticle, getForecast2h, getForecast24h, getGroundImage, getCurrentAlerts} from '../api/weather'
+      import { getStations, getLatestWechatArticle, getForecast2h, getForecast24h, getCurrentAlerts} from '../api/weather'
+      import AiChatBot from '../components/AiChatBot.vue'
+      import { normalizeStation } from '../data/stationCities'
       const stationOptions = ref([])
-      const savedStationId = localStorage.getItem('selectedStationId')
-      const selectedStationId = ref(savedStationId || '54823')
+
       const selectorOpen = ref(false)
+      const selectedCity = ref('')
+      const stationCities = computed(() => [...new Set(stationOptions.value.map(s => s.city))].sort((a, b) => a.localeCompare(b, 'zh-CN')))
+      const cityStations = computed(() => stationOptions.value.filter(s => s.city === selectedCity.value))
+      watch(selectorOpen, open => {
+        if (open) selectedCity.value = stationOptions.value.find(s => s.id === selectedStationId.value)?.city || stationCities.value[0] || ''
+      })
       const stationMapData = ref([])
       const hourlyForecast = ref([])
       const shortForecastText = ref('')
@@ -478,10 +571,375 @@
           )
         })
 
-      const groundImageUrl = ref('')
-      const groundImageTime = ref('')
-      const groundImageLoading = ref(false)
-      let groundImageTimer = null
+      const userLocation = ref({
+        lng: null,
+        lat: null,
+        alt: null,
+        address: '',
+        nearestStation: null
+      })
+
+      const radarStatus = ref(null)
+
+      let radarHomeTimer = null
+
+      const showRadarReminder = computed(() => {
+        if (!radarStatus.value) {
+          return false
+        }
+
+        if (
+          radarStatus.value.status === 'raining'
+        ) {
+          return true
+        }
+
+        if (
+          radarStatus.value.status === 'approaching' &&
+          radarStatus.value.eta_minutes !== null &&
+          radarStatus.value.eta_minutes <= 60
+        ) {
+          return true
+        }
+
+        return false
+      })
+
+      const locationLoading = ref(false)
+      const locationError = ref('')
+      const withoutJinan = value => String(value || '').replaceAll('济南市', '').trim()
+
+      function applySavedLocation(data) {
+        userLocation.value = {
+          lng: data.lng, lat: data.lat, alt: data.alt,
+          address: data.address || data.location?.address || '',
+          nearestStation: data.nearest_station || null
+        }
+        saveLocationToStorage(data)
+        if (data.nearest_station?.id) selectedStationId.value = data.nearest_station.id
+        loadRadarApproach()
+      }
+
+
+      async function handleMapLocationChange(location)
+      {
+      try {
+        const token =
+          localStorage.getItem(
+            'access_token'
+          )
+
+        const response =
+          await fetch(
+            '/api/auth/location',
+            {
+              method: 'PUT',
+
+              headers: {
+                'Content-Type':
+                  'application/json',
+
+                Authorization:
+                  `Bearer ${token}`
+              },
+
+              body: JSON.stringify({
+                lng: location.lng,
+                lat: location.lat,
+                alt: null
+              })
+            }
+          )
+
+        const data =
+          await response.json()
+
+        if (!response.ok) {
+          throw new Error(
+            data.detail ||
+            '位置更新失败'
+          )
+        }
+
+        userLocation.value = {
+          lng: data.lng,
+          lat: data.lat,
+          alt: data.alt,
+          address:
+            data.address || '',
+          nearestStation:
+            data.nearest_station
+        }
+
+        saveLocationToStorage(data)
+
+        if (
+          data.nearest_station
+        ) {
+          selectedStationId.value =
+            data.nearest_station.id
+
+          localStorage.setItem(
+            'selectedStationId',
+            data.nearest_station.id
+          )
+        }
+
+      } catch (error) {
+        console.error(
+          '地图位置更新失败：',
+          error
+        )
+      }
+    }
+
+    function syncLocationFromStorage() {
+    const saved =
+      localStorage.getItem(
+        'syncedUserLocation'
+      )
+
+    if (!saved) {
+      return
+    }
+
+    try {
+      const data =
+        JSON.parse(saved)
+
+      userLocation.value = {
+        lng: data.lng,
+        lat: data.lat,
+        alt: data.alt,
+        address:
+          data.address ||
+          userLocation.value.address,
+        nearestStation:
+          data.nearestStation
+      }
+
+
+
+    } catch (error) {
+      console.error(
+        '同步位置失败：',
+        error
+      )
+    }
+  }
+
+  function saveLocationToStorage(data) {
+    const nearestStation =
+      data.nearest_station ||
+      data.nearestStation ||
+      null
+
+    const savedLocation = {
+      lng: data.lng,
+      lat: data.lat,
+      alt: data.alt ?? null,
+      address: data.address || '',
+      nearestStation
+    }
+
+    localStorage.setItem(
+      'syncedUserLocation',
+      JSON.stringify(savedLocation)
+    )
+
+    if (nearestStation?.id) {
+      localStorage.setItem(
+        'selectedStationId',
+        nearestStation.id
+      )
+    }
+  }
+
+      function getBrowserLocation() {
+        return new Promise(
+          (resolve, reject) => {
+
+            if (!navigator.geolocation) {
+              reject(
+                new Error(
+                  '当前浏览器不支持定位'
+                )
+              )
+              return
+            }
+
+            navigator.geolocation.getCurrentPosition(
+              resolve,
+              reject,
+              {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 60000
+              }
+            )
+          }
+        )
+      }
+
+      async function locateUser() {
+        locationLoading.value = true
+        locationError.value = ''
+
+        try {
+          const token =
+            localStorage.getItem(
+              'access_token'
+            )
+
+          if (!token) {
+            throw new Error(
+              '请先登录后使用自动定位'
+            )
+          }
+
+          const position =
+            await getBrowserLocation()
+
+          const lng =
+            position.coords.longitude
+
+          const lat =
+            position.coords.latitude
+
+          const alt =
+            position.coords.altitude
+
+          const response = await fetch(
+            '/api/auth/location',
+            {
+              method: 'PUT',
+
+              headers: {
+                'Content-Type':
+                  'application/json',
+
+                Authorization:
+                  `Bearer ${token}`
+              },
+
+              body: JSON.stringify({
+                lng,
+                lat,
+                alt
+              })
+            }
+          )
+
+          const data =
+            await response.json()
+
+          if (!response.ok) {
+            throw new Error(
+              data.detail ||
+              '位置保存失败'
+            )
+          }
+
+          userLocation.value = {
+            lng: data.lng,
+            lat: data.lat,
+            alt: data.alt,
+            address: data.address || '当前位置',
+            nearestStation:
+              data.nearest_station
+          }
+
+          saveLocationToStorage(data)
+
+          if (data.nearest_station) {
+            selectedStationId.value =
+              data.nearest_station.id
+
+            localStorage.setItem(
+              'selectedStationId',
+              data.nearest_station.id
+            )
+          }
+
+        } catch (err) {
+          console.error(
+            '定位失败：',
+            err
+          )
+
+          if (
+            err.code === 1
+          ) {
+            locationError.value =
+              '定位权限被拒绝'
+          } else {
+            locationError.value =
+              err.message ||
+              '暂时无法获取位置'
+          }
+
+        } finally {
+          locationLoading.value = false
+        }
+      }
+
+      async function loadRadarApproach() {
+        const lat =
+          Number(userLocation.value.lat)
+
+        const lng =
+          Number(userLocation.value.lng)
+
+        if (
+          !Number.isFinite(lat) ||
+          !Number.isFinite(lng)
+        ) {
+          radarStatus.value = null
+          return
+        }
+
+        try {
+          const response = await fetch(
+            `/api/weather/radar/approach?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`
+          )
+
+          const data =
+            await response.json()
+
+          if (!response.ok) {
+            throw new Error(
+              data.detail ||
+              '雷达趋势分析失败'
+            )
+          }
+
+          radarStatus.value = data
+
+          console.log(
+            '首页雷达降雨监测：',
+            data
+          )
+
+        } catch (error) {
+          console.error(
+            '首页雷达监测失败：',
+            error
+          )
+
+          radarStatus.value = null
+        }
+      }
+
+      watch(
+        () => [
+          userLocation.value.lat,
+          userLocation.value.lng
+        ],
+
+        () => {
+          loadRadarApproach()
+        }
+      )
 
       const alertData = ref({
         has_alert: false,
@@ -558,18 +1016,6 @@
 
         return 'warning-active'
       })
-      async function loadGroundImage() {
-        groundImageLoading.value = true
-        try {
-          const response = await getGroundImage()
-          groundImageUrl.value = `${response.data.url}?t=${Date.now()}`
-          groundImageTime.value = `${response.data.start_time}—${response.data.end_time}`
-        } catch (err) {
-          console.error('过去1小时降水实况图加载失败：', err)
-        } finally {
-          groundImageLoading.value = false
-        }
-      }
 
       function selectStation(station) {
         const id = station.id || station.station
@@ -586,14 +1032,7 @@
           stationMapData.value = response.data
 
           stationOptions.value =
-            response.data.map(
-              station => ({
-                id:
-                  station.station ||
-                  station.id,
-                name: station.name
-              })
-            )
+            response.data.map(normalizeStation)
 
           const exists =
             stationOptions.value.some(
@@ -639,13 +1078,15 @@
       }
 
       async function loadForecast2h() {
+        const stationId = selectedStationId.value
         shortLoading.value = true
         shortError.value = ''
         try {
           const response = await getForecast2h(
-            selectedStationId.value
+            stationId
           )
 
+          if (stationId !== selectedStationId.value) return
           const data = response.data
 
           shortForecastText.value =
@@ -662,6 +1103,7 @@
           }
 
         } catch (err) {
+          if (stationId !== selectedStationId.value) return
           console.error(
             '未来2小时预报加载失败：',
             err
@@ -671,17 +1113,19 @@
             '未来2小时预报加载失败'
 
         } finally {
-          shortLoading.value = false
+          if (stationId === selectedStationId.value) shortLoading.value = false
         }
       }
 
       async function loadForecast24h() {
+        const stationId = selectedStationId.value
         try {
           const response =
             await getForecast24h(
-              selectedStationId.value
+              stationId
             )
 
+          if (stationId !== selectedStationId.value) return
           const data = response.data
 
           hourlyForecast.value =
@@ -709,6 +1153,7 @@
               }))
 
         } catch (err) {
+          if (stationId !== selectedStationId.value) return
           console.error(
             '未来24小时预报加载失败：',
             err
@@ -725,6 +1170,8 @@
         ])
       }
 
+      const homeActive = ref(false)
+      onDeactivated(() => { homeActive.value = false })
       watch(
         selectedStationId,
         () => {
@@ -733,7 +1180,7 @@
             selectedStationId.value
           )
 
-          loadForecasts()
+          if (homeActive.value) loadForecasts()
         },
         { immediate:true }
       )
@@ -759,31 +1206,41 @@
       }
     }
 
-    onMounted(() => {
-      loadStations()
-      loadGroundImage()
-      loadAlerts()
+    onMounted(async () => {
+    loadStations()
 
-      groundImageTimer = setInterval(() => {
-        loadGroundImage()
-      }, 300000)
+    syncLocationFromStorage()
+
+    if (
+      userLocation.value.lat == null ||
+      userLocation.value.lng == null
+    ) {
+      locateUser()
+    }
+
+    loadAlerts()
 
       alertTimer = setInterval(() => {
-        loadAlerts()
+        if (homeActive.value && !document.hidden) loadAlerts()
       }, 60000)
+
+      radarHomeTimer = setInterval(() => {
+        if (homeActive.value && !document.hidden) loadRadarApproach()
+      }, 300000)
     })
 
     onUnmounted(() => {
-      if (groundImageTimer) {
-        clearInterval(groundImageTimer)
-      }
-
-      if (alertTimer) {
-        clearInterval(alertTimer)
-      }
+      if (radarHomeTimer) {clearInterval(radarHomeTimer)}
+      if (alertTimer) {clearInterval(alertTimer)}
     })
 
     onActivated(() => {
+      homeActive.value = true
+      loadForecasts()
+      syncLocationFromStorage()
+
+      loadRadarApproach()
+
       if (!wechatArticle.value) {
         loadWechatArticle()
       }
@@ -791,6 +1248,11 @@
 </script>
 
 <style scoped>
+.city-selection { display: grid; gap: 8px; padding: 8px 6px 12px; color: #64748b; font-size: 12px; }
+.city-selection select { width: 100%; padding: 10px; border: 1px solid #dbe5ff; border-radius: 10px; background: #f5f8ff; color: #334155; font: inherit; font-size: 14px; }
+.city-stations { max-height: min(320px, 45dvh); overflow-y: auto; overscroll-behavior: contain; }
+.city-stations .selected-station { background: #edf3ff; color: #4f7cff; }
+
 .home-page {
   width: 100%;
   min-height: 100vh;
@@ -1269,7 +1731,7 @@
 
   top: 46px;
 
-  width: 155px;
+  width: min(270px, calc(100vw - 48px));
 
   padding: 8px;
 
@@ -1801,5 +2263,190 @@
   100% {
     background-position: 0 0;
   }
+}
+
+.ground-product-select {
+  padding: 6px 10px;
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  background: white;
+  color: #334155;
+  font-size: 12px;
+  outline: none;
+}
+
+.user-location-card {
+  padding: 16px;
+  background: white;
+  border-radius: 18px;
+  box-shadow:
+    0 5px 16px rgba(0, 0, 0, 0.06);
+}
+
+.location-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(3, 1fr);
+  gap: 10px;
+}
+
+.location-grid > div {
+  padding: 12px 8px;
+  background: #f6f8fc;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.location-grid span {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.location-grid strong {
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.nearest-station {
+  display: flex;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid #eef2f7;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.nearest-station div {
+  color: #94a3b8;
+}
+
+.nearest-station strong {
+  color: #1e293b;
+}
+
+.nearest-station span {
+  margin-left: auto;
+  color: #267cff;
+}
+
+.location-status {
+  padding: 14px 4px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.location-error {
+  color: #ef4444;
+}
+
+.relocate-btn {
+  border: none;
+  background: transparent;
+  color: #267cff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.current-place {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: #f6f8fc;
+  border-radius: 14px;
+}
+
+.current-place-icon {
+  font-size: 24px;
+}
+
+.current-place-label {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.current-place-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.radar-home-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  padding: 15px 16px;
+
+  border-radius: 18px;
+
+  text-decoration: none;
+  color: inherit;
+
+  box-shadow:
+    0 5px 16px rgba(0, 0, 0, 0.06);
+}
+
+.radar-raining {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+}
+
+.radar-approaching {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+}
+
+.radar-alert-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  width: 44px;
+  height: 44px;
+
+  border-radius: 14px;
+
+  background: rgba(255, 255, 255, 0.8);
+
+  font-size: 23px;
+}
+
+.radar-alert-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.radar-alert-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e11d48;
+}
+
+.radar-approaching
+.radar-alert-title {
+  color: #ea580c;
+}
+
+.radar-alert-desc {
+  margin-top: 5px;
+
+  font-size: 12px;
+  line-height: 1.5;
+
+  color: #64748b;
+}
+
+.radar-alert-arrow {
+  flex-shrink: 0;
+
+  font-size: 24px;
+  color: #94a3b8;
 }
 </style>
