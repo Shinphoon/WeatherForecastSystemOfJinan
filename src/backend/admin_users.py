@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Literal
 from database import get_connection
 from auth import get_token_user
+from saved_locations import rows_for_users
 
 router = APIRouter(prefix='/admin', tags=['用户管理'])
 
@@ -36,6 +37,9 @@ def list_users(authorization: str = Header(default=None), page: int = Query(defa
             (page - 1) * page_size, page_size)
         columns = [column[0] for column in cursor.description]
         users = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        locations = rows_for_users([user['id'] for user in users])
+        for user in users:
+            user['saved_locations'] = locations.get(user['id'], [])
         return {'users': users, 'total': total, 'page': page, 'page_size': page_size, 'viewer_id': viewer_id}
     finally:
         conn.close()

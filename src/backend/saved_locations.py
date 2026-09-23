@@ -46,6 +46,21 @@ def rows(user_id):
             'SELECT id,name,address,lng,lat,station_id,station_name FROM saved_locations WHERE user_id=? ORDER BY id',
             (user_id,)).fetchall()]
 
+def rows_for_users(user_ids):
+    """Return saved places grouped by account using one SQLite query."""
+    ids = [int(user_id) for user_id in user_ids]
+    if not ids:
+        return {}
+    placeholders = ','.join('?' for _ in ids)
+    with closing(connect()) as conn:
+        result = {user_id: [] for user_id in ids}
+        records = conn.execute(f'''SELECT id,user_id,name,address,lng,lat,station_id,station_name
+            FROM saved_locations WHERE user_id IN ({placeholders}) ORDER BY user_id,id''', ids).fetchall()
+        for record in records:
+            item = dict(record)
+            result.setdefault(item.pop('user_id'), []).append(item)
+        return result
+
 class SavedLocationRequest(BaseModel):
     lng: float
     lat: float

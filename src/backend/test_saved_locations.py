@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -41,5 +42,17 @@ class SavedLocationTests(unittest.TestCase):
         with patch.object(s.requests,'get',return_value=response):
             result=self.client.get('/auth/locations/search',params={'q':'淄博'}).json()['results']
         self.assertEqual(len(result),1);self.assertEqual(result[0]['name'],'淄博')
+    def test_rows_for_users_groups_places_without_cross_account_leaks(self):
+        with closing(s.connect()) as conn:
+            conn.executemany('''INSERT INTO saved_locations
+                (user_id,name,address,lng,lat,station_id,station_name) VALUES(?,?,?,?,?,?,?)''', [
+                (7,'家','淄博市',118.05,36.81,'54830','淄博'),
+                (8,'学校','济南市',117.00,36.65,'54823','济南'),
+            ])
+            conn.commit()
+        grouped = s.rows_for_users([7, 9])
+        self.assertEqual([place['name'] for place in grouped[7]], ['家'])
+        self.assertEqual(grouped[9], [])
+        self.assertNotIn(8, grouped)
 
 if __name__=='__main__':unittest.main()

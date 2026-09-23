@@ -1,474 +1,170 @@
-# 济南市天气实况与天气预报可视化系统
+# 山东省天气实况与预报可视化系统
 
-## 项目简介
+一个面向山东省的移动优先天气 WebGIS 平台。系统以 Vue 3 构建交互界面，以 FastAPI 提供天气、用户与推送服务，并通过 SQL Server 和 SQLite 保存账号、国家站、反馈、消息及个人地点等数据。
 
-本项目是一个面向济南市及周边地区的天气信息 WebGIS 可视化系统，基于 Vue 3 构建前端界面，使用 FastAPI 提供后端服务，并结合 SQL Server 数据库实现用户、气象站等数据的持久化管理。
+项目已经覆盖“观测—分析—预报—预警—通知—管理”的完整使用流程，适合作为 WebGIS、气象信息可视化和前后端综合课程设计成果。
 
-系统目前已实现天气实况、天气预报、国家气象站地图、天气雷达、用户登录注册、个人设置、管理员管理以及微信公众号文章展示等功能。
+## 已实现功能
 
-项目以移动端页面为主要设计目标，可用于 WebGIS、气象信息可视化及前后端综合课程设计。
+### 山东天气实况
 
----
+- 接入山东省 16 个地级市的 146 个国家气象站，先选地级市、再选国家站。
+- 首页、实况页和预报页共享当前国家站，切换页面不会丢失选择。
+- 展示气温、相对湿度、气压、风向、风速、能见度和降水等实时观测及 24 小时趋势。
+- 首页和实况页提供天气雷达地图、山东省矢量轮廓、站点显隐开关与用户位置蓝点。
+- 对全省站点观测进行空间插值，绘制实时气温、相对湿度、1 小时/24 小时降水、24 小时变温和变压色斑图；计算放入 Web Worker，避免阻塞页面交互。
+- 按所选地点展示济南或淄博实况产品，支持降水、气温、风、能见度等分类及时段切换。
 
-## 主要功能
+### 天气预报与个性化地点
 
-### 天气实况
+- 提供未来 2 小时、24 小时和 7 天预报。
+- 登录用户可保存最多 5 个山东省内地点，在首页快速切换。
+- 保存地点时同步记录地址、经纬度及最近国家气象站。
+- 首页展示天气预警，并支持消息中心的消息展开、收起和一键已读。
 
-- 国家气象站实时天气查询
-- 温度、湿度、气压等气象要素展示
-- 风向与风速展示
-- 实况气象数据图表
-- 地图气象站选择
-- 支持动态加载数据库中的气象站
+### 主动天气服务
 
-### 天气预报
+- 根据雷达回波移动趋势判断用户是否即将进入降水区域；用户登录时若尚未开始下雨，可推送临近降雨提醒。
+- 早间、午间和晚间天气报告可分别启停并自定义发送时间，时间范围分别为 05:00–11:00、11:00–16:30、16:30–22:30。
+- 天气报告与临近降雨提醒可进入站内消息中心；绑定邮箱并开启推送后同步发送邮件。
+- 使用 Gmail SMTP 发信，收件地址支持 Gmail、QQ、126、163 等常见邮箱。
 
-- 短时天气预报
-- 未来 2 小时天气预报
-- 未来 24 小时天气预报
-- 多气象站切换查询
-- 天气预报数据可视化
+### 用户、反馈与管理
 
-### WebGIS 地图
+- 支持注册、登录、JWT 身份认证、手机号和邮箱绑定、密码修改、位置与推送设置。
+- 用户可提交意见反馈，并在管理员回复后查看处理结果。
+- 管理员可查看反馈、填写回复及修改处理状态。
+- 管理员可查看用户列表；列表默认只显示“昵称、编号、状态”，展开后查看账号资料和该用户保存的地点。
+- 管理员可封禁或解封普通账号；被封禁账号无法登录，已有令牌也会被拒绝。
+- 管理员可维护国家站和微信公众号文章。
 
-- 国家气象站空间分布
-- 气象站点击交互
-- 经纬度空间定位
-- 济南及周边地区气象站展示
-- 雷达组合反射率图像展示
+### 体验与性能
 
-### 用户系统
+- 移动端优先布局，同时适配桌面浏览器。
+- 路由按需加载，天气请求带缓存和并发复用，页面切换包含竞态保护。
+- 插值计算在 Worker 中执行，地图图层按需更新。
+- 内置结合当前站点、预报和雷达信息的流式天气助手。
 
-- 用户注册
-- 用户登录
-- JWT 身份认证
-- 用户信息读取
-- 登录状态保持
-- 退出登录
+## 系统结构
 
-### 个人设置
+```mermaid
+flowchart LR
+    A[Vue 3 / Vite] -->|/api 代理| B[FastAPI]
+    B --> C[天气实况与预报数据]
+    B --> D[SQL Server<br/>用户与国家站]
+    B --> E[SQLite<br/>消息、反馈与保存地点]
+    B --> F[邮件与定时推送]
+    A --> G[OpenLayers / ECharts / Web Worker]
+```
 
-- 默认气象站设置
-- 预警推送设置
-- 修改登录密码
-- 修改绑定手机号
-- 浏览器获取当前位置
-- 保存最近位置经纬度
+### 技术栈
 
-### 管理员功能
-
-系统区分普通用户与管理员。
-
-普通用户可以使用天气查询、地图、预报及个人设置功能。
-
-管理员可以进入管理中心，目前包括：
-
-- 国家气象站管理
-- 新增国家气象站
-- 气象站列表查看
-- 微信公众号文章管理
-
-### 微信公众号文章
-
-系统支持展示微信公众号最新文章。
-
-当前采用人工提交微信公众号文章 URL、后端解析文章信息的方式，实现：
-
-- 最新文章 URL 保存
-- 文章标题解析
-- 作者信息解析
-- 封面信息解析
-- 发布时间解析
-- 首页最新文章展示
-
----
-
-## 当前气象站
-
-系统目前已接入 11 个国家气象站：
-
-| 站号 | 站名 |
+| 层级 | 技术 |
 | --- | --- |
-| 54727 | 章丘 |
-| 54816 | 长清 |
-| 54818 | 平阴 |
-| 54821 | 济阳 |
-| 54823 | 济南 |
-| 54828 | 莱芜 |
-| 54827 | 泰安 |
-| 54826 | 泰山 |
-| 54830 | 淄博 |
-| 54822 | 邹平 |
-| 54829 | 周村 |
+| 前端 | Vue 3、Vite、Vue Router、Axios |
+| 地图与图表 | OpenLayers、ECharts、GeoJSON、Web Worker |
+| 后端 | Python、FastAPI、Uvicorn、Pydantic |
+| 数据 | SQL Server、SQLite、pyodbc |
+| 安全 | JWT、bcrypt、管理员角色校验 |
+| 通知 | 站内消息、定时任务、Gmail SMTP |
 
-气象站信息已经由静态 JSON 配置逐步迁移至 SQL Server 数据库，实现动态读取与管理。
-
----
-
-## 技术栈
-
-### 前端
-
-- Vue 3
-- Vite
-- JavaScript
-- HTML
-- CSS
-- Vue Router
-- Axios
-- WebGIS 地图技术
-- Browser Geolocation API
-
-### 后端
-
-- Python
-- FastAPI
-- Uvicorn
-- Pydantic
-- python-jose
-- bcrypt
-- python-dotenv
-- HTTP 数据获取与解析
-
-### 数据库
-
-- Microsoft SQL Server
-- T-SQL
-- pyodbc
-
-数据库目前主要保存：
-
-- 用户账号
-- 用户角色
-- 手机号
-- 用户最近位置
-- 推送设置
-- 国家气象站信息
-
----
-
-## 系统架构
+## 目录说明
 
 ```text
-Vue 3
-  │
-  │ Axios
-  ▼
-Vite Proxy
-  │
-  ▼
-FastAPI
-  │
-  ├── 天气数据接口
-  ├── 用户认证接口
-  ├── 气象站接口
-  ├── 公众号文章接口
-  │
-  ▼
-SQL Server
-```
-
-前端统一通过：
-
-```text
-/api
-```
-
-访问后端服务。
-
-Vite 开发服务器会将请求代理至：
-
-```text
-http://127.0.0.1:8000
-```
-
----
-
-## 项目目录
-
-```text
-jinan-weather
-│
-├─ src
-│  ├─ api
-│  │  ├─ auth.js
-│  │  └─ weather.js
-│  │
-│  ├─ components
-│  │  ├─ StationMap.vue
-│  │  └─ WeatherCard.vue
-│  │
-│  ├─ views
-│  │  ├─ Home.vue
-│  │  ├─ Reality.vue
-│  │  ├─ Forecast.vue
-│  │  ├─ Radar.vue
-│  │  ├─ Mine.vue
-│  │  ├─ Login.vue
-│  │  ├─ Register.vue
-│  │  ├─ Security.vue
-│  │  ├─ PhoneSetting.vue
-│  │  ├─ LocationSetting.vue
-│  │  └─ WechatAdmin.vue
-│  │
-│  ├─ router
-│  │  └─ index.js
-│  │
-│  └─ backend
-│     ├─ main.py
-│     ├─ auth.py
-│     ├─ database.py
-│     ├─ qweather_spider.py
-│     ├─ forecast_service.py
-│     ├─ wechat_service.py
-│     └─ wechat_latest.json
-│
+jinan-weather/
+├─ src/
+│  ├─ api/                 # 前端请求与缓存
+│  ├─ components/          # 地图、消息、实况产品、管理组件
+│  ├─ data/                # 山东边界与地级市—国家站关系
+│  ├─ map/                 # 插值、图层和 Web Worker
+│  ├─ views/               # 首页、实况、预报、我的等页面
+│  └─ backend/             # FastAPI 服务、定时推送与测试
+├─ DAILY_BRIEFING.md       # 天气报告与邮件配置说明
+├─ WEATHER_MAP.md          # 实况地图实现说明
 ├─ vite.config.js
-├─ package.json
-├─ .gitignore
-└─ README.md
+└─ package.json
 ```
 
----
+## 本机运行
 
-## 数据库设计
+首次使用前安装前端依赖，并在 `src/backend/venv` 中准备 Python 依赖。数据库、邮箱、天气数据源等敏感配置放在项目根目录 `.env`；该文件已被 Git 忽略，请勿提交密钥或密码。
 
-### sys_user
-
-用于存储用户账号及个人设置。
-
-主要字段包括：
-
-```text
-id
-username
-password
-nickname
-phone
-avatar
-role
-last_lng
-last_lat
-last_address
-push_enable
-status
-create_time
-update_time
-```
-
-其中：
-
-```text
-role = user
-```
-
-表示普通用户。
-
-```text
-role = admin
-```
-
-表示系统管理员。
-
-### weather_station
-
-用于保存国家气象站信息。
-
-主要字段包括：
-
-```text
-station_id
-station_name
-station_type
-province
-city
-district
-lng
-lat
-altitude
-status
-create_time
-update_time
-```
-
----
-
-## API 示例
-
-### 获取气象站
-
-```http
-GET /weather/stations
-```
-
-### 用户注册
-
-```http
-POST /auth/register
-```
-
-### 用户登录
-
-```http
-POST /auth/login
-```
-
-### 获取当前用户
-
-```http
-GET /auth/me
-```
-
-### 修改密码
-
-```http
-PUT /auth/password
-```
-
-### 修改手机号
-
-```http
-PUT /auth/phone
-```
-
-### 保存当前位置
-
-```http
-PUT /auth/location
-```
-
-### 获取微信公众号文章
-
-```http
-GET /weather/wechat/latest
-```
-
----
-
-## 本地运行
-
-### 1. 启动后端
-
-进入：
+打开第一个 PowerShell 终端，在项目根目录启动后端：
 
 ```powershell
-cd src\backend
+cd D:\WebGIS实习\jinan-weather
+.\src\backend\venv\Scripts\Activate.ps1
+python -m uvicorn main:app --app-dir src\backend --reload --host 0.0.0.0 --port 8000
 ```
 
-激活 Python 虚拟环境：
+打开第二个 PowerShell 终端启动前端：
 
 ```powershell
-venv\Scripts\activate
-```
-
-启动 FastAPI：
-
-```powershell
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-后端地址：
-
-```text
-http://127.0.0.1:8000
-```
-
-FastAPI API 文档：
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-### 2. 启动前端
-
-回到项目根目录：
-
-```powershell
+cd D:\WebGIS实习\jinan-weather
 npm run dev
 ```
 
-默认访问：
+本机访问 `http://localhost:5173`，FastAPI 接口文档位于 `http://127.0.0.1:8000/docs`。
+
+## 让同一局域网的小组成员访问
+
+电脑与手机需要连接同一个 Wi-Fi 或局域网，并保持电脑开机、前后端终端持续运行。
+
+后端仍使用上面的启动命令。第二个终端改为：
+
+```powershell
+cd D:\WebGIS实习\jinan-weather
+npm run dev:lan
+```
+
+查询电脑的局域网 IPv4 地址：
+
+```powershell
+ipconfig
+```
+
+找到当前无线网卡或以太网适配器的“IPv4 地址”，例如 `192.168.1.23`。小组成员在浏览器打开：
 
 ```text
-http://localhost:5173
+http://192.168.1.23:5173
 ```
 
----
+请将示例 IP 替换为你的实际 IPv4 地址，不要在其他设备上填写 `localhost`。Windows 首次询问网络访问权限时，允许 Node.js 和 Python 通过“专用网络”防火墙。
 
-## 环境变量
+## 测试与构建
 
-项目中的敏感信息通过 `.env` 保存。
+```powershell
+# 前端单元测试
+node --test src\api\requestCache.test.js src\data\groundProducts.test.js src\data\stationCities.test.js src\map\weatherInterpolation.test.js
 
-例如：
+# 后端回归测试
+.\src\backend\venv\Scripts\python.exe -m unittest discover -s src\backend -p "test_*.py"
 
-```env
-WECHAT_APP_ID=
-WECHAT_APP_SECRET=
-WECHAT_ADMIN_PASSWORD=
+# 生产构建
+npm run build
 ```
 
-`.env` 已加入 `.gitignore`，请勿将 AppSecret、数据库密码或管理员密码上传至 GitHub。
+## 课程答辩 / PPT 展示建议
 
----
+推荐按照以下顺序演示，能清楚体现项目从数据到服务的完整链路：
 
-## 当前开发进度
+1. 在首页切换保存地点，展示定位、预警和当前国家站联动。
+2. 在实况页按地级市选择国家站，展示观测曲线与济南/淄博实况产品。
+3. 在地图切换气温、湿度、降水、变温和变压插值图层，并演示站点显隐。
+4. 展示预报页、消息中心和临近降雨提醒。
+5. 展示早/午/晚天气报告的开关、时间范围及邮件推送。
+6. 用管理员账号展开用户资料与保存地点，演示反馈回复和账号封禁。
 
-目前已经完成：
+可重点概括四个亮点：**全省 146 站空间组织、气象要素插值可视化、基于位置的主动降雨提醒、用户端与管理端闭环**。
 
-- [x] Vue 移动端页面框架
-- [x] FastAPI 后端
-- [x] 天气实况
-- [x] 天气预报
-- [x] 雷达图像展示
-- [x] 国家站地图
-- [x] 多气象站切换
-- [x] SQL Server 数据库
-- [x] 用户注册与登录
-- [x] JWT 身份认证
-- [x] 用户角色区分
-- [x] 管理员入口
-- [x] 动态气象站读取
-- [x] 修改密码
-- [x] 修改手机号
-- [x] 最近位置保存
-- [x] 微信公众号文章展示
-- [ ] 管理员路由权限保护
-- [ ] 管理员后端权限统一认证
-- [ ] 气象站数据库新增接口完善
-- [ ] 用户意见反馈
-- [ ] 关于系统页面
-- [ ] 天气预警功能进一步完善
+## 安全说明
 
----
+- `.env`、数据库文件、邮箱授权码和第三方 API 密钥不得上传到仓库。
+- 用户与管理员接口均在后端校验身份和角色，不能只依赖前端页面隐藏。
+- 邮件发送使用邮箱授权码，不应保存或展示邮箱登录密码。
 
-## 项目特点
+## 项目信息
 
-本项目不是单纯的天气页面，而是将：
-
-```text
-气象数据
-+
-WebGIS
-+
-Vue 前端
-+
-FastAPI 后端
-+
-SQL Server 数据库
-+
-用户权限系统
-```
-
-整合到同一个天气信息可视化系统中。
-
-项目目前已经具备较完整的前端、后端、数据库和 WebGIS 综合应用结构，并仍在持续完善。
-
----
-
-## 项目名称
-
-**济南市天气实况与天气预报可视化系统**
+**山东省天气实况与预报可视化系统**
 
 WebGIS Course Design
-
-Version 1.0

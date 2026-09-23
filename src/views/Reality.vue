@@ -418,6 +418,10 @@ onBeforeUnmount(() => {
   position: relative;
   margin-top: 5px;
 }
+.station-row :deep(.city-menu) {
+  right: auto;
+  left: clamp(24px, 4vw, 64px);
+}
 .station-selector {
   padding: 0;
   border: none;
@@ -452,6 +456,12 @@ onBeforeUnmount(() => {
 .station-menu button.selected {
   background: #eef5ff;
   color: #267cff;
+}
+@media (max-width: 420px) {
+  .station-row :deep(.city-menu) {
+    left: 18px;
+    width: min(270px, calc(100vw - 68px));
+  }
 }
 .live-badge {
   display: flex;

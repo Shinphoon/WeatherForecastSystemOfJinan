@@ -45,6 +45,10 @@ class AdminUserTests(unittest.TestCase):
     def setUp(self):
         self.db = FakeDB()
         self.patches = [patch.object(module, 'get_connection', self.db.connect) for module in (auth, admin_users)]
+        self.patches.append(patch.object(admin_users, 'rows_for_users', return_value={
+            2: [{'id': 9, 'name': '学校', 'address': '山东理工大学（西校区）',
+                 'lng': 118.05, 'lat': 36.81, 'station_id': '54830', 'station_name': '淄博'}]
+        }))
         for item in self.patches: item.start()
         app = FastAPI()
         app.include_router(auth.router)
@@ -64,6 +68,9 @@ class AdminUserTests(unittest.TestCase):
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.json()['total'], 3)
         self.assertNotIn('password', result.json()['users'][0])
+        users = {user['id']: user for user in result.json()['users']}
+        self.assertEqual(users[2]['saved_locations'][0]['name'], '学校')
+        self.assertEqual(users[1]['saved_locations'], [])
 
     def test_ban_blocks_existing_token_and_login_then_unban(self):
         token = self.headers(2)['Authorization']

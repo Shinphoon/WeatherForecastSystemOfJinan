@@ -16,14 +16,22 @@ logger = logging.getLogger(__name__)
 def connect():
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
-    conn.execute('''CREATE TABLE IF NOT EXISTS briefings (
-        user_id INTEGER NOT NULL, day TEXT NOT NULL, title TEXT, content TEXT,
-        created_at TEXT, read INTEGER NOT NULL DEFAULT 0,
-        email_status TEXT NOT NULL DEFAULT 'pending', PRIMARY KEY(user_id, day))''')
-    if 'email_error' not in {r[1] for r in conn.execute('PRAGMA table_info(briefings)')}:
-        conn.execute("ALTER TABLE briefings ADD COLUMN email_error TEXT NOT NULL DEFAULT ''")
-    conn.commit()
-    return conn
+    try:
+        # Serialize schema creation/migration because several login requests may
+        # initialize the inbox at the same time.
+        conn.execute('BEGIN IMMEDIATE')
+        conn.execute('''CREATE TABLE IF NOT EXISTS briefings (
+            user_id INTEGER NOT NULL, day TEXT NOT NULL, title TEXT, content TEXT,
+            created_at TEXT, read INTEGER NOT NULL DEFAULT 0,
+            email_status TEXT NOT NULL DEFAULT 'pending',
+            email_error TEXT NOT NULL DEFAULT '', PRIMARY KEY(user_id, day))''')
+        if 'email_error' not in {r[1] for r in conn.execute('PRAGMA table_info(briefings)')}:
+            conn.execute("ALTER TABLE briefings ADD COLUMN email_error TEXT NOT NULL DEFAULT ''")
+        conn.commit()
+        return conn
+    except Exception:
+        conn.close()
+        raise
 
 def profile(user_id):
     with closing(get_connection()) as conn:
